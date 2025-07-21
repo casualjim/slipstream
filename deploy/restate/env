@@ -1,0 +1,14 @@
+RESTATE_CLUSTER_NAME: restate-cluster
+# For more on logging, see: https://docs.restate.dev/operate/monitoring/logging
+RESTATE_LOG_FILTER: restate=info
+RESTATE_DEFAULT_REPLICATION: 2  # We require minimum of 2 nodes to accept writes
+# The addresses where nodes can reach each other over the "internal" Docker Compose network
+RESTATE_METADATA_CLIENT__ADDRESSES: '[http://restate-1:5122,http://restate-2:5122,http://restate-3:5122]'
+# Partition snapshotting, see: https://docs.restate.dev/operate/snapshots
+RESTATE_WORKER__SNAPSHOTS__DESTINATION: s3://restate/snapshots
+RESTATE_WORKER__SNAPSHOTS__SNAPSHOT_INTERVAL_NUM_RECORDS: 1000
+RESTATE_WORKER__SNAPSHOTS__AWS_REGION: local
+RESTATE_WORKER__SNAPSHOTS__AWS_ENDPOINT_URL: http://minio:9000
+RESTATE_WORKER__SNAPSHOTS__AWS_ALLOW_HTTP: true
+RESTATE_WORKER__SNAPSHOTS__AWS_ACCESS_KEY_ID: minioadmin
+RESTATE_WORKER__SNAPSHOTS__AWS_SECRET_ACCESS_KEY: minioadmin

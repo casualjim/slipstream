@@ -1,0 +1,8 @@
+[package]
+name = "slipstream-registry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nats = "0.25.0"
+slipstream-core = { path = "../slipstream-core" }

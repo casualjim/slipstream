@@ -1,0 +1,12 @@
+[settings]
+experimental = true
+
+[tools]
+rust = { version = "latest", profile = "default" }
+"aqua:cargo-bins/cargo-binstall" = "latest"
+mkcert = "latest"
+"aqua:nextest-rs/nextest/cargo-nextest" = "latest"
+"aqua:rhysd/actionlint" = "latest"
+"aqua:protocolbuffers/protobuf/protoc" = "latest"
+bun = "latest"
+"cargo:j178/prefligit" = "rev:fac3516167d50c9b2c111b00ad3d9a4401d8f7d3"

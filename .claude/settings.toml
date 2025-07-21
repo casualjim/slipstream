@@ -1,0 +1,24 @@
+[[hooks]]
+event = "PreToolUse"
+
+[hooks.matcher]
+tool_name = "git_commit"
+
+# Command to run a pre-commit check script.
+# The script should exit with a non-zero code to halt the commit.
+command = "prefligit run --all-files"
+
+[[hooks]]
+# The event that triggers the hook.
+event = "PostToolUse"
+
+# (Optional) Conditions for the hook to run.
+[hooks.matcher]
+tool_name = "edit_file"
+file_paths = ["*.rs", "crates/**/*.rs"]
+
+# The shell command to execute.
+command = "cargo check $CLAUDE_FILE_PATHS && cargo clippy --fix $CLAUDE_FILE_PATHS -- -D warnings"
+
+# (Optional) Whether to run the command in the background.
+run_in_background = false

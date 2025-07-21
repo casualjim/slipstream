@@ -1,0 +1,39 @@
+[package]
+name = "slipstream-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aide = { version = "0.15", features = ["axum-json", "axum-query", "axum-matched-path", "axum-tokio", "axum-extra-query", "axum-extra-json-deserializer", "redoc", "scalar"] }
+async-compression = { version = "0.4", features = ["all-algorithms", "tokio"] }
+axum = { version = "0.8.4", features = ["macros", "multipart", "ws", "http2"] }
+axum-helmet = "0.2.0"
+axum-otel-metrics = "0.12.0"
+axum-server = { version = "0.7.2", features = ["tls-rustls"] }
+axum-tracing-opentelemetry = "0.29.0"
+
+eyre.workspace = true
+futures.workspace = true
+genai = "0.4.0-alpha.6"
+http = "1"
+listenfd = "1"
+rustls = "0.23.29"
+rustls-acme = { version = "0.14.0", features = [
+  "axum",
+  "tls12",
+  "tokio",
+  "tower",
+] }
+slipstream-core = { path = "../slipstream-core" }
+tokio.workspace = true
+tokio-util.workspace = true
+tower = { version = "0.5.2" }
+tower-http = { version = "0.6.6", features = [
+  "fs",
+  "tracing",
+  "trace",
+  "cors",
+  "compression-full",
+] }
+tower-layer = { version = "0.3.3" }
+tracing.workspace = true
