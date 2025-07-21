@@ -1,8 +1,10 @@
-#[derive(Clone, Debug)]
-pub struct AppState;
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct AppState {}
 
 impl AppState {
-  pub fn new() -> Self {
-    Self {}
+  pub async fn new() -> eyre::Result<Self> {
+    Ok(Self {})
   }
 }

@@ -3,3 +3,9 @@
 
 /bun.lock
 /Cargo.lock
+.env
+.env.*
+!.env.example
+.mcp.json
+mcp.json
+.claude/settings.local.json

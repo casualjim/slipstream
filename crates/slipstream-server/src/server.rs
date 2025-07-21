@@ -94,7 +94,7 @@ pub async fn run(
     None
   };
 
-  let state = AppState::new();
+  let state = AppState::new().await?;
 
   let metrics = metrics_layer();
 

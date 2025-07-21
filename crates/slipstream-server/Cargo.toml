@@ -25,6 +25,9 @@ rustls-acme = { version = "0.14.0", features = [
   "tower",
 ] }
 slipstream-core = { path = "../slipstream-core" }
+slipstream-store = { path = "../slipstream-store" }
+
+# sqlx = { version = "0.8.6", features = ["sqlite-unbundled", "runtime-tokio"] }
 tokio.workspace = true
 tokio-util.workspace = true
 tower = { version = "0.5.2" }

@@ -25,7 +25,7 @@ repos:
         description: Check that Cargo.toml dependencies are sorted alphabetically
         entry: cargo
         language: system
-        args: ["sort", "--check"]
+        args: ["sort", "--workspace"]
         files: '^Cargo\.toml$'
         pass_filenames: false
 
