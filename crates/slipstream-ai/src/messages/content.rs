@@ -14,10 +14,17 @@ use ::base64::{Engine as _, engine::general_purpose};
 /*  ContentOrParts                                                       */
 /* --------------------------------------------------------------------- */
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ContentOrParts {
-  pub content: Option<String>,
-  pub parts: Option<Vec<ContentPart>>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContentOrParts {
+  Content(String),
+  Parts(Vec<ContentPart>),
+  None,
+}
+
+impl Default for ContentOrParts {
+  fn default() -> Self {
+    ContentOrParts::None
+  }
 }
 
 impl Serialize for ContentOrParts {
@@ -25,15 +32,9 @@ impl Serialize for ContentOrParts {
   where
     S: Serializer,
   {
-    match (
-      self
-        .content
-        .as_ref()
-        .map_or(false, |f| !f.trim().is_empty()),
-      self.parts.as_ref(),
-    ) {
-      (true, _) => serializer.serialize_str(self.content.as_ref().unwrap()),
-      (_, Some(parts)) => parts.serialize(serializer),
+    match self {
+      ContentOrParts::Content(s) if !s.trim().is_empty() => serializer.serialize_str(s),
+      ContentOrParts::Parts(parts) => parts.serialize(serializer),
       _ => serializer.serialize_none(),
     }
   }
@@ -46,19 +47,13 @@ impl<'de> Deserialize<'de> for ContentOrParts {
   {
     let v: Value = Deserialize::deserialize(deserializer)?;
     Ok(match v {
-      Value::String(s) => Self {
-        content: Some(s),
-        parts: None,
-      },
+      Value::String(s) => ContentOrParts::Content(s),
       Value::Array(arr) => {
         let parts: Vec<ContentPart> =
           Vec::<ContentPart>::deserialize(Value::Array(arr)).map_err(de::Error::custom)?;
-        Self {
-          content: None,
-          parts: Some(parts),
-        }
+        ContentOrParts::Parts(parts)
       }
-      Value::Null => Self::default(),
+      Value::Null => ContentOrParts::None,
       _ => {
         return Err(de::Error::custom(
           "ContentOrParts expects string, array or null",
@@ -72,11 +67,18 @@ impl<'de> Deserialize<'de> for ContentOrParts {
 /*  AssistantContentOrParts                                              */
 /* --------------------------------------------------------------------- */
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct AssistantContentOrParts {
-  pub content: Option<String>,
-  pub refusal: Option<String>,
-  pub parts: Option<Vec<AssistantContentPart>>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum AssistantContentOrParts {
+  Content(String),
+  Refusal(String),
+  Parts(Vec<AssistantContentPart>),
+  None,
+}
+
+impl Default for AssistantContentOrParts {
+  fn default() -> Self {
+    AssistantContentOrParts::None
+  }
 }
 
 impl Serialize for AssistantContentOrParts {
@@ -84,32 +86,12 @@ impl Serialize for AssistantContentOrParts {
   where
     S: Serializer,
   {
-    if self
-      .content
-      .as_ref()
-      .map(|c| !c.trim().is_empty())
-      .unwrap_or(false)
-      && self
-        .refusal
-        .as_ref()
-        .map(|c| !c.trim().is_empty())
-        .unwrap_or(false)
-    {
-      return Err(serde::ser::Error::custom(
-        "both content and refusal are set",
-      ));
+    match self {
+      AssistantContentOrParts::Content(s) => serializer.serialize_str(s),
+      AssistantContentOrParts::Refusal(s) => serializer.serialize_str(s),
+      AssistantContentOrParts::Parts(parts) => parts.serialize(serializer),
+      AssistantContentOrParts::None => serializer.serialize_none(),
     }
-
-    if let Some(ref s) = self.content {
-      return serializer.serialize_str(s);
-    }
-    if let Some(ref s) = self.refusal {
-      return serializer.serialize_str(s);
-    }
-    if let Some(ref parts) = self.parts {
-      return parts.serialize(serializer);
-    }
-    serializer.serialize_none()
   }
 }
 
@@ -120,21 +102,17 @@ impl<'de> Deserialize<'de> for AssistantContentOrParts {
   {
     let v: Value = Deserialize::deserialize(deserializer)?;
     Ok(match v {
-      Value::String(s) => Self {
-        content: Some(s),
-        refusal: None,
-        parts: None,
+      Value::String(s) => {
+        // We can't distinguish between content and refusal from just a string,
+        // so we default to content. The refusal should be set through the proper variant.
+        AssistantContentOrParts::Content(s)
       },
       Value::Array(arr) => {
         let parts: Vec<AssistantContentPart> =
           Vec::<AssistantContentPart>::deserialize(Value::Array(arr)).map_err(de::Error::custom)?;
-        Self {
-          content: None,
-          refusal: None,
-          parts: Some(parts),
-        }
+        AssistantContentOrParts::Parts(parts)
       }
-      Value::Null => Self::default(),
+      Value::Null => AssistantContentOrParts::None,
       _ => {
         return Err(de::Error::custom(
           "AssistantContentOrParts expects string, array or null",
@@ -322,7 +300,7 @@ pub fn video(data: Vec<u8>, format: &str) -> ContentPart {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use serde_json::{Value, json};
+  use serde_json::Value;
   use std::{iter, sync::Arc, thread};
 
   /* -------------------------------------------------- */
@@ -353,65 +331,44 @@ mod tests {
       ("null when empty", ContentOrParts::default(), "null"),
       (
         "plain string",
-        ContentOrParts {
-          content: Some("hello world".into()),
-          parts: None,
-        },
+        ContentOrParts::Content("hello world".into()),
         r#""hello world""#,
       ),
       (
         "whitespace string treated as null",
-        ContentOrParts {
-          content: Some("   ".into()),
-          parts: None,
-        },
+        ContentOrParts::Content("   ".into()),
         "null",
       ),
       (
         "single text part",
-        ContentOrParts {
-          content: None,
-          parts: Some(vec![ContentPart::Text(text("hello world"))]),
-        },
+        ContentOrParts::Parts(vec![ContentPart::Text(text("hello world"))]),
         r#"[{"type":"text","text":"hello world"}]"#,
       ),
       (
         "single image part",
-        ContentOrParts {
-          content: None,
-          parts: Some(vec![ContentPart::Image(image(
-            "http://example.com/image.jpg",
-          ))]),
-        },
+        ContentOrParts::Parts(vec![ContentPart::Image(image(
+          "http://example.com/image.jpg",
+        ))]),
         r#"[{"type":"image","image_url":"http://example.com/image.jpg"}]"#,
       ),
       (
         "single audio",
-        ContentOrParts {
-          content: None,
-          parts: Some(vec![audio(b"test audio data".to_vec(), "mp3")]),
-        },
+        ContentOrParts::Parts(vec![audio(b"test audio data".to_vec(), "mp3")]),
         r#"[{"type":"audio","input_audio":{"data":"dGVzdCBhdWRpbyBkYXRh","format":"mp3"}}]"#,
       ),
       (
         "single video",
-        ContentOrParts {
-          content: None,
-          parts: Some(vec![video(b"test video data".to_vec(), "mp4")]),
-        },
+        ContentOrParts::Parts(vec![video(b"test video data".to_vec(), "mp4")]),
         r#"[{"type":"video","input_video":{"data":"dGVzdCB2aWRlbyBkYXRh","format":"mp4"}}]"#,
       ),
       (
         "mixed parts",
-        ContentOrParts {
-          content: None,
-          parts: Some(vec![
-            ContentPart::Text(text("hello")),
-            ContentPart::Image(image("http://example.com/image.jpg")),
-            audio(b"test audio data".to_vec(), "mp3"),
-            video(b"test video data".to_vec(), "mp4"),
-          ]),
-        },
+        ContentOrParts::Parts(vec![
+          ContentPart::Text(text("hello")),
+          ContentPart::Image(image("http://example.com/image.jpg")),
+          audio(b"test audio data".to_vec(), "mp3"),
+          video(b"test video data".to_vec(), "mp4"),
+        ]),
         r#"[{"type":"text","text":"hello"},{"type":"image","image_url":"http://example.com/image.jpg"},{"type":"audio","input_audio":{"data":"dGVzdCBhdWRpbyBkYXRh","format":"mp3"}},{"type":"video","input_video":{"data":"dGVzdCB2aWRlbyBkYXRh","format":"mp4"}}]"#,
       ),
     ];
@@ -420,7 +377,13 @@ mod tests {
       let got = serde_json::to_string(in_val).unwrap();
       json_eq(&got, want);
       // round-trip
-      assert_roundtrip(in_val);
+      if name == &"whitespace string treated as null" {
+        // Special case: whitespace serializes to null, deserializes to None
+        let dec: ContentOrParts = serde_json::from_str(&got).unwrap();
+        assert_eq!(dec, ContentOrParts::default());
+      } else {
+        assert_roundtrip(in_val);
+      }
       println!("ok – {name}");
     }
   }
@@ -435,24 +398,15 @@ mod tests {
     let cases = &[
       (
         r#"[]"#,
-        ContentOrParts {
-          parts: Some(vec![]),
-          content: None,
-        },
+        ContentOrParts::Parts(vec![]),
       ),
       (
         r#""hello world""#,
-        ContentOrParts {
-          content: Some("hello world".into()),
-          parts: None,
-        },
+        ContentOrParts::Content("hello world".into()),
       ),
       (
         r#"[{"type":"text","text":"hello world"}]"#,
-        ContentOrParts {
-          parts: Some(vec![ContentPart::Text(text("hello world"))]),
-          content: None,
-        },
+        ContentOrParts::Parts(vec![ContentPart::Text(text("hello world"))]),
       ),
     ];
     for (raw, want) in cases {
@@ -471,28 +425,19 @@ mod tests {
       ("null", AssistantContentOrParts::default(), "null"),
       (
         "plain string",
-        AssistantContentOrParts {
-          content: Some("hello world".into()),
-          ..Default::default()
-        },
+        AssistantContentOrParts::Content("hello world".into()),
         r#""hello world""#,
       ),
       (
         "text part",
-        AssistantContentOrParts {
-          parts: Some(vec![AssistantContentPart::Text(text("hello world"))]),
-          ..Default::default()
-        },
+        AssistantContentOrParts::Parts(vec![AssistantContentPart::Text(text("hello world"))]),
         r#"[{"type":"text","text":"hello world"}]"#,
       ),
       (
         "refusal part",
-        AssistantContentOrParts {
-          parts: Some(vec![AssistantContentPart::Refusal(refusal(
-            "I cannot help with that",
-          ))]),
-          ..Default::default()
-        },
+        AssistantContentOrParts::Parts(vec![AssistantContentPart::Refusal(refusal(
+          "I cannot help with that",
+        ))]),
         r#"[{"type":"refusal","refusal":"I cannot help with that"}]"#,
       ),
     ];
@@ -535,20 +480,17 @@ mod tests {
   #[test]
   fn very_large_content() {
     let big = iter::repeat('a').take(1 << 20).collect::<String>(); // 1 MiB
-    let cop = ContentOrParts {
-      content: Some(big.clone()),
-      parts: None,
-    };
+    let cop = ContentOrParts::Content(big.clone());
     assert_roundtrip(&cop);
-    assert_eq!(cop.content.as_ref().unwrap().len(), big.len());
+    match &cop {
+      ContentOrParts::Content(s) => assert_eq!(s.len(), big.len()),
+      _ => panic!("Expected Content variant"),
+    }
   }
 
   #[test]
   fn empty_parts_vs_null() {
-    let empty = ContentOrParts {
-      parts: Some(vec![]),
-      content: None,
-    };
+    let empty = ContentOrParts::Parts(vec![]);
     assert_eq!(serde_json::to_string(&empty).unwrap(), "[]");
 
     let nil = ContentOrParts::default();
@@ -557,13 +499,10 @@ mod tests {
 
   #[test]
   fn concurrent_marshal() {
-    let val = Arc::new(ContentOrParts {
-      parts: Some(vec![
-        ContentPart::Text(text("hello")),
-        ContentPart::Image(image("http://example.com")),
-      ]),
-      content: None,
-    });
+    let val = Arc::new(ContentOrParts::Parts(vec![
+      ContentPart::Text(text("hello")),
+      ContentPart::Image(image("http://example.com")),
+    ]));
     let mut handles = vec![];
     for _ in 0..10 {
       let v = Arc::clone(&val);

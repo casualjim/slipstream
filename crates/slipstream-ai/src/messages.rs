@@ -1,13 +1,19 @@
+mod content;
+mod session;
+
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub use content::*;
+pub use session::*;
+
 // --- Core Message Envelope ---
 
 /// The generic message envelope containing metadata and a payload.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct MessageEnvelope<T> {
+pub struct Message<T> {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub run_id: Option<Uuid>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -106,40 +112,6 @@ pub struct Retry {
   pub tool_call_id: Option<String>,
 }
 
-// --- Content Structs ---
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(untagged)]
-pub enum ContentOrParts {
-  Content(String),
-  Parts(Vec<ContentPart>),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(tag = "type")]
-pub enum ContentPart {
-  #[serde(rename = "text")]
-  Text { text: String },
-  #[serde(rename = "image")]
-  Image { image_url: String },
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(untagged)]
-pub enum AssistantContentOrParts {
-  Content(String),
-  Parts(Vec<AssistantContentPart>),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(tag = "type")]
-pub enum AssistantContentPart {
-  #[serde(rename = "text")]
-  Text { text: String },
-  #[serde(rename = "refusal")]
-  Refusal { refusal: String },
-}
-
 // --- Message Builder ---
 
 #[derive(Default, Clone)]
@@ -184,8 +156,8 @@ impl MessageBuilder {
     self
   }
 
-  fn build<T>(self, payload: T) -> MessageEnvelope<T> {
-    MessageEnvelope {
+  fn build<T>(self, payload: T) -> Message<T> {
+    Message {
       run_id: self.run_id,
       turn_id: self.turn_id,
       sender: self.sender,
@@ -195,50 +167,47 @@ impl MessageBuilder {
     }
   }
 
-  pub fn instructions(self, content: impl Into<String>) -> MessageEnvelope<ModelMessage> {
+  pub fn instructions(self, content: impl Into<String>) -> Message<ModelMessage> {
     self.build(ModelMessage::Instructions(InstructionsMessage {
       type_field: "instructions".to_string(),
       content: content.into(),
     }))
   }
 
-  pub fn user_prompt(self, content: impl Into<String>) -> MessageEnvelope<Request> {
+  pub fn user_prompt(self, content: impl Into<String>) -> Message<Request> {
     self.build(Request::User(UserMessage {
       content: ContentOrParts::Content(content.into()),
     }))
   }
 
-  pub fn user_prompt_multipart(self, parts: Vec<ContentPart>) -> MessageEnvelope<Request> {
+  pub fn user_prompt_multipart(self, parts: Vec<ContentPart>) -> Message<Request> {
     self.build(Request::User(UserMessage {
       content: ContentOrParts::Parts(parts),
     }))
   }
 
-  pub fn assistant_message(self, content: impl Into<String>) -> MessageEnvelope<Response> {
+  pub fn assistant_message(self, content: impl Into<String>) -> Message<Response> {
     self.build(Response::Assistant(AssistantMessage {
       content: Some(AssistantContentOrParts::Content(content.into())),
       refusal: None,
     }))
   }
 
-  pub fn assistant_message_multipart(
-    self,
-    parts: Vec<AssistantContentPart>,
-  ) -> MessageEnvelope<Response> {
+  pub fn assistant_message_multipart(self, parts: Vec<AssistantContentPart>) -> Message<Response> {
     self.build(Response::Assistant(AssistantMessage {
       content: Some(AssistantContentOrParts::Parts(parts)),
       refusal: None,
     }))
   }
 
-  pub fn assistant_refusal(self, refusal: impl Into<String>) -> MessageEnvelope<Response> {
+  pub fn assistant_refusal(self, refusal: impl Into<String>) -> Message<Response> {
     self.build(Response::Assistant(AssistantMessage {
       content: None,
       refusal: Some(refusal.into()),
     }))
   }
 
-  pub fn tool_call(self, tool_calls: Vec<ToolCallData>) -> MessageEnvelope<Response> {
+  pub fn tool_call(self, tool_calls: Vec<ToolCallData>) -> Message<Response> {
     self.build(Response::ToolCall(ToolCallMessage { tool_calls }))
   }
 
@@ -247,7 +216,7 @@ impl MessageBuilder {
     tool_call_id: &str,
     tool_name: &str,
     content: &str,
-  ) -> MessageEnvelope<Request> {
+  ) -> Message<Request> {
     self.build(Request::ToolResponse(ToolResponse {
       tool_call_id: tool_call_id.to_string(),
       tool_name: tool_name.to_string(),
@@ -255,12 +224,7 @@ impl MessageBuilder {
     }))
   }
 
-  pub fn tool_error(
-    self,
-    tool_call_id: &str,
-    tool_name: &str,
-    error: &str,
-  ) -> MessageEnvelope<Request> {
+  pub fn tool_error(self, tool_call_id: &str, tool_name: &str, error: &str) -> Message<Request> {
     self.build(Request::Retry(Retry {
       tool_call_id: Some(tool_call_id.to_string()),
       tool_name: Some(tool_name.to_string()),
@@ -340,12 +304,13 @@ mod tests {
 
     // UserPromptMultipart
     let parts = vec![
-      ContentPart::Text {
+      ContentPart::Text(TextContentPart {
         text: "part1".to_string(),
-      },
-      ContentPart::Image {
-        image_url: "image.jpg".to_string(),
-      },
+      }),
+      ContentPart::Image(ImageContentPart {
+        url: "image.jpg".to_string(),
+        detail: None,
+      }),
     ];
     let msg = builder
       .clone()
@@ -395,12 +360,12 @@ mod tests {
 
     // AssistantMessageMultipart
     let assistant_parts = vec![
-      AssistantContentPart::Text {
+      AssistantContentPart::Text(TextContentPart {
         text: "part1".to_string(),
-      },
-      AssistantContentPart::Refusal {
+      }),
+      AssistantContentPart::Refusal(RefusalContentPart {
         refusal: "not allowed".to_string(),
-      },
+      }),
     ];
     let msg = builder
       .clone()
@@ -507,7 +472,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<ModelMessage> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<ModelMessage> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // User Message with Text
@@ -523,7 +488,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Request> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // User Message with Parts
@@ -533,12 +498,13 @@ mod tests {
       .with_sender("user")
       .with_timestamp(now)
       .user_prompt_multipart(vec![
-        ContentPart::Text {
+        ContentPart::Text(TextContentPart {
           text: "hello".into(),
-        },
-        ContentPart::Image {
-          image_url: "http://example.com/image.jpg".into(),
-        },
+        }),
+        ContentPart::Image(ImageContentPart {
+          url: "http://example.com/image.jpg".into(),
+          detail: None,
+        }),
       ]);
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
@@ -546,7 +512,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Request> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // Assistant Message with Text
@@ -562,7 +528,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Response> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // Assistant Message with Parts
@@ -572,12 +538,12 @@ mod tests {
       .with_sender("assistant")
       .with_timestamp(now)
       .assistant_message_multipart(vec![
-        AssistantContentPart::Text {
+        AssistantContentPart::Text(TextContentPart {
           text: "hello".into(),
-        },
-        AssistantContentPart::Refusal {
+        }),
+        AssistantContentPart::Refusal(RefusalContentPart {
           refusal: "cannot do that".into(),
-        },
+        }),
       ]);
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
@@ -585,7 +551,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Response> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // Assistant Refusal Message
@@ -601,7 +567,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Response> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // Tool Call Message
@@ -621,7 +587,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Response> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // Tool Response Message
@@ -637,7 +603,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Request> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
 
     // Retry Message
@@ -653,7 +619,7 @@ mod tests {
       run_id, turn_id, now_str
     );
     assert_json_eq(&data, &expected);
-    let decoded: MessageEnvelope<Request> = serde_json::from_str(&data).unwrap();
+    let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
     assert_eq!(msg, decoded);
   }
 
@@ -669,12 +635,12 @@ mod tests {
       (
         "invalid type field",
         r#"{"type":"unknown","content":"test"}"#,
-        "unknown variant `unknown` for enum Request",
+        "unknown variant `unknown`",
       ),
       (
         "missing required content field for instructions",
         r#"{"type":"instructions"}"#,
-        "missing field `content`",
+        "unknown variant `instructions`",
       ),
       (
         "missing required content field for user message",
@@ -684,7 +650,7 @@ mod tests {
       (
         "both content and refusal in assistant message",
         r#"{"type":"assistant","content":"hello","refusal":"cannot"}"#,
-        "unexpected token",
+        "unknown variant `assistant`",
       ),
       (
         "missing tool_calls in tool call",
@@ -694,7 +660,7 @@ mod tests {
       (
         "invalid tool_calls type in tool call",
         r#"{"type":"tool_call","tool_calls":"not_array"}"#,
-        "invalid type: string \"not_array\", expected a sequence",
+        "invalid type: string",
       ),
       (
         "missing tool_name in tool response",
@@ -719,9 +685,9 @@ mod tests {
     ];
 
     for (name, json, expected_error) in test_cases {
-      let err_request = serde_json::from_str::<MessageEnvelope<Request>>(json).err();
-      let err_response = serde_json::from_str::<MessageEnvelope<Response>>(json).err();
-      let err_model_message = serde_json::from_str::<MessageEnvelope<ModelMessage>>(json).err();
+      let err_request = serde_json::from_str::<Message<Request>>(json).err();
+      let err_response = serde_json::from_str::<Message<Response>>(json).err();
+      let err_model_message = serde_json::from_str::<Message<ModelMessage>>(json).err();
 
       let err_string = format!("{:?}{:?}{:?}", err_request, err_response, err_model_message);
 

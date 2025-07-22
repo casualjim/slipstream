@@ -25,7 +25,7 @@ impl Completer for OpenAILikeCompleter {
   async fn complete(
     &self,
     _prompt: &str,
-  ) -> Result<Vec<messages::MessageEnvelope<messages::ModelMessage>>> {
+  ) -> Result<Vec<messages::Message<messages::ModelMessage>>> {
     Ok(vec![])
   }
 }
