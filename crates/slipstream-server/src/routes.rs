@@ -20,3 +20,7 @@ pub fn openapi() -> OpenApi {
 pub fn router(app: AppState) -> ApiRouter<AppState> {
   ApiRouter::new().with_state(app)
 }
+
+async fn health_check() -> &'static str {
+  "OK"
+}

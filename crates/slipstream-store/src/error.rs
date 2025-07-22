@@ -1,13 +1,33 @@
-/// Result type alias for the Kumos POC project
+/// A specialized [`Result`] type for slipstream-store operations.
 ///
-/// This alias wraps the standard Result with our custom Error type,
-/// leveraging color_eyre for better error reporting.
+/// This type alias is used throughout the slipstream-store crate to represent
+/// results that may return a central [`Error`] type. By default, the error type
+/// is [`Error`], but it can be overridden if needed.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the value returned on success.
+/// * `E` - The error type, which defaults to [`Error`].
+///
+/// # Examples
+///
+/// ```rust
+/// use slipstream_store::error::Result;
+///
+/// fn do_something() -> Result<()> {
+///     // Your logic here
+///     Ok(())
+/// }
+/// ```
 pub type Result<T, E = Error> = eyre::Result<T, E>;
 
-/// Comprehensive error type for the Kumos POC project
+/// Central error type for slipstream-store operations.
 ///
-/// This enum contains all possible error conditions that can occur
-/// within the application, ensuring proper error handling and reporting.
+/// Encapsulates all error variants that may arise from interacting with
+/// the graph database (Kuzu), meta database (LanceDB), IO, Arrow, and
+/// serialization layers. Provides granular error reporting for database
+/// state, data integrity, and transaction management, supporting
+/// transparent conversion from underlying error types.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
   /// Error from the graphdb (Kuzu)

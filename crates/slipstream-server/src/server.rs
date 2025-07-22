@@ -109,10 +109,10 @@ pub async fn run(
 
   let app = Router::new()
     .merge(api_routes)
-    .route("/api/openapi.json", get(serve_openapi))
+    .route("/api/v1/openapi.json", get(serve_openapi))
     .route(
-      "/api/docs",
-      Scalar::new("/api/openapi.json").axum_route().into(),
+      "/api/v1/docs",
+      Scalar::new("/api/v1/openapi.json").axum_route().into(),
     )
     .layer(HelmetLayer::new(Helmet::default()))
     .layer(OtelInResponseLayer)

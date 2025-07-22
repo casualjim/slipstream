@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+#MISE description="Build Slipstream"
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+cargo build --release --workspace

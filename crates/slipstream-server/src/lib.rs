@@ -1,4 +1,6 @@
 mod app;
+mod error;
+mod models;
 mod routes;
 pub mod server;
 

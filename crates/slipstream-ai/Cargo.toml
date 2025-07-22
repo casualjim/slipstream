@@ -1,0 +1,31 @@
+[package]
+name = "slipstream-ai"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-openai.workspace = true
+async-trait.workspace = true
+bytes = "1"
+futures-core = "0.3"
+http = "1"
+http-body = "1"
+reqwest.workspace = true
+reqwest-middleware.workspace = true
+reqwest-retry.workspace = true
+reqwest-tracing.workspace = true
+slipstream-core = { path = "../slipstream-core" }
+thiserror.workspace = true
+secrecy.workspace = true
+eyre.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jiff.workspace = true
+uuid.workspace = true
+base64 = "0.22.1"
+
+
+[dev-dependencies]
+futures-util = "0.3"
+tokio.workspace = true
+base64 = "0.22.1"

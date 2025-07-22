@@ -1,15 +1,27 @@
+mod edges;
+mod engine;
 mod migrations;
-pub fn add(left: u64, right: u64) -> u64 {
-  left + right
-}
+mod mutations;
+mod nodes;
+mod queries;
+mod service;
+
+pub use engine::Engine;
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use ctor::ctor;
+  use tracing_subscriber::prelude::*;
 
-  #[test]
-  fn it_works() {
-    let result = add(2, 2);
-    assert_eq!(result, 4);
+  #[ctor]
+  fn init_color_backtrace() {
+    let env_filter = tracing_subscriber::EnvFilter::from_default_env();
+    let subscriber = tracing_subscriber::fmt::layer()
+      .pretty()
+      .with_test_writer()
+      .with_filter(env_filter);
+
+    tracing_subscriber::registry().with(subscriber).init();
+    color_backtrace::install();
   }
 }
