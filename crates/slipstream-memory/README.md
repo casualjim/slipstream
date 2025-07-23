@@ -62,10 +62,10 @@ use slipstream_memory::Engine;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the memory engine
     let engine = Engine::new();
-    
+
     // The engine provides access to the temporal knowledge graph
     // and handles dual-database operations automatically
-    
+
     Ok(())
 }
 ```

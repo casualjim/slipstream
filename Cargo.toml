@@ -10,7 +10,6 @@ edition = "2024"
 [workspace.dependencies]
 arrow = "55.2"
 arrow-array = "55.2"
-mockall = "0.13.1"
 assert_cmd = "2.0.17"
 async-openai = { git = "https://github.com/casualjim/async-openai", branch = "reqwest-middleware", default-features = false, features = [
   "rustls-webpki-roots",
@@ -35,6 +34,7 @@ lancedb = { version = "0.21.1", features = [
   "polars",
 ] }
 lzma-sys = { version = "0.1.20", features = ["static"] }
+mockall = "0.13.1"
 nuid = "0.6"
 
 num_cpus = "1.17.0"

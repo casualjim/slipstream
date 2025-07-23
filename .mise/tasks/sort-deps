@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+#MISE description="Sort the dependencies in the dependency manifest files"
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+cargo sort --workspace

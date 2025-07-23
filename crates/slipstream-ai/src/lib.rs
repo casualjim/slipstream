@@ -1,13 +1,15 @@
 mod agent;
+mod completer;
 mod embedder;
 mod error;
 mod events;
 mod reranker;
 
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 pub use error::{Error, Result};
+use futures::Stream;
 use secrecy::SecretString;
 
 use events::StreamEvent;
@@ -17,6 +19,11 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 use crate::agent::Agent;
+
+pub type DefaultStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
+
+/// Type alias for the most common case - a stream of Results
+pub type ResultStream<T> = DefaultStream<Result<T>>;
 
 #[derive(Debug, Clone, Default, TypedBuilder)]
 pub struct ProviderConfig {

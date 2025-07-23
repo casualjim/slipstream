@@ -1,4 +1,4 @@
-# Slipstream 
+# Slipstream
 
 Slipstream is an agentic compute and state cloud.
 

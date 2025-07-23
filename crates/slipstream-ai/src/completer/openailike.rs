@@ -45,11 +45,14 @@ impl OpenAILikeCompleter {
     let mut req = CreateChatCompletionRequestArgs::default()
       .model(&model.model)
       .messages(messages)
-      .max_tokens(model.max_tokens)
       .temperature(model.temperature)
       .top_p(model.top_p)
       .n(model.n)
       .build()?;
+
+    if let Some(max_tokens) = model.max_tokens {
+      req.max_completion_tokens = Some(max_tokens);
+    }
 
     let tools = agent.tools();
     if !tools.is_empty() {
@@ -104,22 +107,15 @@ impl OpenAILikeCompleter {
 
 #[async_trait]
 impl Completer for OpenAILikeCompleter {
-  async fn complete<'a>(&self, params: CompletionParams<'a>) -> Result<()> {
+  async fn complete<'a>(&self, mut params: CompletionParams<'a>) -> Result<()> {
     let messages = conversions::messages_to_openai(&params.session.messages());
     let model_config = params.agent.model();
 
-    let request = CreateChatCompletionRequestArgs::default()
-      .model(&model_config.model)
-      .messages(messages)
-      .max_tokens(model_config.max_tokens)
-      .temperature(model_config.temperature)
-      .top_p(model_config.top_p)
-      .n(model_config.n)
-      .build()?;
+    let request = self.create_chat_completion_request(&mut params.session, params.agent.clone())?;
 
     let response = self.client.chat().create(request).await?;
 
-    response.choices.first().ok_or_else(|| Error::NoChoices)?;
+    let choice = response.choices.first().ok_or_else(|| Error::NoChoices)?;
 
     // for choice in response.choices {
     //   if let Some(message) = choice.message {

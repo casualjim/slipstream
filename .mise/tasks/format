@@ -6,4 +6,7 @@ proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
 biome format --write
-rustfmt --edition 2024 ./**/*.rs
+
+# Enable globstar for recursive globbing
+shopt -s globstar
+rustfmt --edition 2024 crates/**/*.rs

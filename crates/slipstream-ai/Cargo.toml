@@ -6,31 +6,31 @@ edition.workspace = true
 [dependencies]
 async-openai.workspace = true
 async-trait.workspace = true
+base64.workspace = true
 bytes = "1"
-futures-core = "0.3"
+either = "1"
+eyre.workspace = true
+futures.workspace = true
 http = "1"
 http-body = "1"
+jiff.workspace = true
+mockall.workspace = true
 reqwest.workspace = true
 reqwest-middleware.workspace = true
 reqwest-retry.workspace = true
 reqwest-tracing.workspace = true
-slipstream-core = { path = "../slipstream-core" }
-thiserror.workspace = true
+schemars.workspace = true
 secrecy.workspace = true
-eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-jiff.workspace = true
-uuid.workspace = true
-base64.workspace = true
+slipstream-core = { path = "../slipstream-core" }
+thiserror.workspace = true
 tokio.workspace = true
 typed-builder.workspace = true
-schemars.workspace = true
+uuid.workspace = true
 validator.workspace = true
-mockall.workspace = true
-either = "1"
 
 [dev-dependencies]
-futures-util = "0.3"
-ctor.workspace = true
 color-backtrace.workspace = true
+ctor.workspace = true
+futures-util = "0.3"

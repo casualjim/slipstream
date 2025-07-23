@@ -40,7 +40,7 @@ Slipstream Core is the foundational Rust library for building temporal knowledge
 
 - **Store in KuzuDB**: Properties used in WHERE clauses, ORDER BY, graph traversal patterns, or JOIN conditions
   - Examples: uuid, group_id, created_at, temporal fields (valid_at, invalid_at, expired_at)
-  
+
 - **Store in LanceDB only**: Data payload properties that are returned but not queried
   - Examples: fact text, content, attributes, interactions arrays, embeddings
 

@@ -105,9 +105,9 @@ impl<'de> Deserialize<'de> for ModelMessage {
   {
     use serde::de::Error;
     use serde_json::Value;
-    
+
     let value = Value::deserialize(deserializer)?;
-    
+
     // Check if it's an object with a type field
     if let Value::Object(ref map) = value {
       match map.get("type") {
@@ -115,21 +115,15 @@ impl<'de> Deserialize<'de> for ModelMessage {
           let type_str = type_str.clone();
           // Try to determine which category this type belongs to
           match type_str.as_str() {
-            "user" | "tool_response" | "retry" => {
-              Request::deserialize(value)
-                .map(ModelMessage::Request)
-                .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e)))
-            }
-            "assistant" | "tool_call" => {
-              Response::deserialize(value)
-                .map(ModelMessage::Response)
-                .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e)))
-            }
-            "instructions" | "system" | "developer" => {
-              InstructionsMessage::deserialize(value)
-                .map(ModelMessage::Instructions)
-                .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e)))
-            }
+            "user" | "tool_response" | "retry" => Request::deserialize(value)
+              .map(ModelMessage::Request)
+              .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e))),
+            "assistant" | "tool_call" => Response::deserialize(value)
+              .map(ModelMessage::Response)
+              .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e))),
+            "instructions" | "system" | "developer" => InstructionsMessage::deserialize(value)
+              .map(ModelMessage::Instructions)
+              .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e))),
             unknown => Err(D::Error::custom(format!(
               "Unknown message type '{}'. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer",
               unknown
@@ -137,15 +131,15 @@ impl<'de> Deserialize<'de> for ModelMessage {
           }
         }
         Some(_) => Err(D::Error::custom(
-          "Message 'type' field must be a string. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer"
+          "Message 'type' field must be a string. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer",
         )),
         None => Err(D::Error::custom(
-          "Missing required 'type' field in message. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer"
-        ))
+          "Missing required 'type' field in message. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer",
+        )),
       }
     } else {
       Err(D::Error::custom(
-        "Message must be a JSON object with a 'type' field. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer"
+        "Message must be a JSON object with a 'type' field. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer",
       ))
     }
   }

@@ -123,7 +123,7 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
-  use futures::{stream, StreamExt};
+  use futures::{StreamExt, stream};
 
   #[tokio::test]
   async fn test_ordered_stream() {

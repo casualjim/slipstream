@@ -9,7 +9,8 @@ mkcert = "latest"
 "aqua:rhysd/actionlint" = "latest"
 "aqua:protocolbuffers/protobuf/protoc" = "latest"
 bun = "latest"
-"cargo:j178/prefligit" = "rev:fac3516167d50c9b2c111b00ad3d9a4401d8f7d3"
+"cargo:j178/prefligit" = "rev:781b6ac45ca84350682d34ed2312914abd15e31f"
+"cargo:cargo-sort" = "latest"
 
 [env]
 _.file = ".env"

@@ -3,15 +3,14 @@
 //! This module provides reusable transformers for common patterns in the database layer.
 
 use crate::Result;
+use crate::ResultStream;
 use arrow_array::RecordBatch;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 
-/// Type alias for a boxed stream of results
-pub type ResultStream<T> = Pin<Box<dyn Stream<Item = Result<T>> + Send>>;
-
 /// Common transformer utilities
 pub mod common {
+
   use super::*;
 
   /// Creates a transformer that yields a single unit value
