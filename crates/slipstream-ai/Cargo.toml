@@ -22,10 +22,15 @@ serde.workspace = true
 serde_json.workspace = true
 jiff.workspace = true
 uuid.workspace = true
-base64 = "0.22.1"
-
+base64.workspace = true
+tokio.workspace = true
+typed-builder.workspace = true
+schemars.workspace = true
+validator.workspace = true
+mockall.workspace = true
+either = "1"
 
 [dev-dependencies]
 futures-util = "0.3"
-tokio.workspace = true
-base64 = "0.22.1"
+ctor.workspace = true
+color-backtrace.workspace = true

@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use super::ToDatabase;
-use crate::Result;
+use crate::{Result, ResultStream};
 use arrow_array::RecordBatch;
 use futures::Stream;
 use std::sync::Arc;
@@ -64,16 +64,14 @@ pub enum DatabaseOperation<T, D: ToDatabase = NoData> {
 }
 
 /// Type alias for graph query result stream - owned for easier lifetime management
-pub type GraphResultStream = Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send + 'static>>;
+pub type GraphResultStream = ResultStream<Vec<kuzu::Value>>;
 
 /// Type alias for stream transformer - transforms RecordBatch streams to output type T
 /// The transformer returns T directly, where T might be a ResultStream or other type
-pub type StreamTransformer<T> =
-  Box<dyn FnOnce(Pin<Box<dyn Stream<Item = Result<RecordBatch>> + Send>>) -> T + Send>;
+pub type StreamTransformer<T> = Box<dyn FnOnce(ResultStream<RecordBatch>) -> T + Send>;
 
 /// Type alias for graph stream transformer - transforms graph results to output type T
-pub type GraphStreamTransformer<T> =
-  Box<dyn FnOnce(GraphResultStream) -> T + Send>;
+pub type GraphStreamTransformer<T> = Box<dyn FnOnce(GraphResultStream) -> T + Send>;
 
 impl<T, D: ToDatabase> DatabaseOperation<T, D> {
   /// Convenience constructor for single save operations where contexts are ()
@@ -120,8 +118,9 @@ pub enum QueryOperation<T> {
     query_builder: Box<
       dyn FnOnce(
           Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send + Unpin>,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<PrimaryStoreQuery>> + Send>>
-        + Send,
+        ) -> std::pin::Pin<
+          Box<dyn std::future::Future<Output = Result<PrimaryStoreQuery>> + Send>,
+        > + Send,
     >,
     transformer: Box<
       dyn FnOnce(
@@ -132,7 +131,6 @@ pub enum QueryOperation<T> {
     >,
   },
 }
-
 
 /// Mutation patterns for saving data
 pub enum MutationOperation<T, D: ToDatabase> {
@@ -152,21 +150,19 @@ pub enum MutationOperation<T, D: ToDatabase> {
     data: Vec<Arc<D>>,
     graph_context: D::GraphContext,
     meta_context: D::MetaContext,
-    cypher: &'static str,  // Same cypher as single, will be executed for each item
+    cypher: &'static str, // Same cypher as single, will be executed for each item
     transformer: Box<dyn FnOnce(usize) -> T + Send>, // Returns number of items saved
   },
-
 }
 
-
 pub struct GraphIndexQuery {
-  pub cypher: String,  // These are often built dynamically with format!()
-  pub params: Vec<(&'static str, kuzu::Value)>,  // Parameter names are usually static
+  pub cypher: String, // These are often built dynamically with format!()
+  pub params: Vec<(&'static str, kuzu::Value)>, // Parameter names are usually static
 }
 
 pub struct PrimaryStoreQuery {
   pub table: &'static str,
-  pub filter: Option<String>,  // This needs to be String since it's dynamically built
+  pub filter: Option<String>, // This needs to be String since it's dynamically built
   pub limit: Option<usize>,
   pub offset: Option<usize>,
   pub vector_search: Option<VectorSearchParams>,

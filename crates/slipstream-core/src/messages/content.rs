@@ -18,12 +18,11 @@ use ::base64::{Engine as _, engine::general_purpose};
 pub enum ContentOrParts {
   Content(String),
   Parts(Vec<ContentPart>),
-  None,
 }
 
 impl Default for ContentOrParts {
   fn default() -> Self {
-    ContentOrParts::None
+    ContentOrParts::Content(String::new())
   }
 }
 
@@ -53,7 +52,7 @@ impl<'de> Deserialize<'de> for ContentOrParts {
           Vec::<ContentPart>::deserialize(Value::Array(arr)).map_err(de::Error::custom)?;
         ContentOrParts::Parts(parts)
       }
-      Value::Null => ContentOrParts::None,
+      Value::Null => ContentOrParts::Content(String::new()),
       _ => {
         return Err(de::Error::custom(
           "ContentOrParts expects string, array or null",
@@ -72,12 +71,11 @@ pub enum AssistantContentOrParts {
   Content(String),
   Refusal(String),
   Parts(Vec<AssistantContentPart>),
-  None,
 }
 
 impl Default for AssistantContentOrParts {
   fn default() -> Self {
-    AssistantContentOrParts::None
+    AssistantContentOrParts::Content(String::new())
   }
 }
 
@@ -87,10 +85,11 @@ impl Serialize for AssistantContentOrParts {
     S: Serializer,
   {
     match self {
-      AssistantContentOrParts::Content(s) => serializer.serialize_str(s),
-      AssistantContentOrParts::Refusal(s) => serializer.serialize_str(s),
+      AssistantContentOrParts::Content(s) if !s.trim().is_empty() => serializer.serialize_str(s),
+      AssistantContentOrParts::Refusal(s) if !s.trim().is_empty() => serializer.serialize_str(s),
       AssistantContentOrParts::Parts(parts) => parts.serialize(serializer),
-      AssistantContentOrParts::None => serializer.serialize_none(),
+
+      _ => serializer.serialize_none(),
     }
   }
 }
@@ -106,13 +105,13 @@ impl<'de> Deserialize<'de> for AssistantContentOrParts {
         // We can't distinguish between content and refusal from just a string,
         // so we default to content. The refusal should be set through the proper variant.
         AssistantContentOrParts::Content(s)
-      },
+      }
       Value::Array(arr) => {
         let parts: Vec<AssistantContentPart> =
           Vec::<AssistantContentPart>::deserialize(Value::Array(arr)).map_err(de::Error::custom)?;
         AssistantContentOrParts::Parts(parts)
       }
-      Value::Null => AssistantContentOrParts::None,
+      Value::Null => AssistantContentOrParts::Content(String::new()),
       _ => {
         return Err(de::Error::custom(
           "AssistantContentOrParts expects string, array or null",
@@ -396,10 +395,7 @@ mod tests {
   #[test]
   fn content_or_parts_unmarshal_various() {
     let cases = &[
-      (
-        r#"[]"#,
-        ContentOrParts::Parts(vec![]),
-      ),
+      (r#"[]"#, ContentOrParts::Parts(vec![])),
       (
         r#""hello world""#,
         ContentOrParts::Content("hello world".into()),
@@ -422,11 +418,20 @@ mod tests {
   #[test]
   fn assistant_content_or_parts_marshal() {
     let cases = &[
-      ("null", AssistantContentOrParts::default(), "null"),
+      (
+        "null when empty",
+        AssistantContentOrParts::default(),
+        "null",
+      ),
       (
         "plain string",
         AssistantContentOrParts::Content("hello world".into()),
         r#""hello world""#,
+      ),
+      (
+        "empty string treated as null",
+        AssistantContentOrParts::Content("".into()),
+        "null",
       ),
       (
         "text part",
@@ -443,6 +448,7 @@ mod tests {
     ];
     for (name, in_val, want) in cases {
       let got = serde_json::to_string(in_val).unwrap();
+      println!("Testing: {name}");
       json_eq(&got, want);
       assert_roundtrip(in_val);
       println!("ok – {name}");

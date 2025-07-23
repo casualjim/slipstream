@@ -48,7 +48,7 @@ impl Default for EmbeddingConfig {
       api_base: "http://localhost:11434/v1".to_string(),
       model: "snowflake-arctic-embed:xs".to_string(),
       api_key: "doesntmatter".to_string(),
-      dimensions: 1024,
+      dimensions: 384, // Match the actual dimensions of snowflake-arctic-embed:xs
     }
   }
 }

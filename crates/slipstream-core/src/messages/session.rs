@@ -6,9 +6,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{
-  ContentOrParts, Message, MessageBuilder, ModelMessage, Request, Response, ToolCallData,
-};
+use super::{Message, ModelMessage, Request, Response};
 
 /// Tracks token consumption across different aspects of AI model interactions.
 /// It provides detailed breakdowns of token usage for both prompts and completions,
@@ -339,7 +337,7 @@ impl Aggregator {
 /// - Creating save points in long-running operations
 /// - Comparing states at different points in time
 /// - Rolling back to previous states if needed
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Checkpoint {
   id: Uuid,
   messages: AggregatedMessages,
@@ -389,7 +387,7 @@ impl Checkpoint {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::messages::MessageBuilder;
+  use crate::messages::{ContentOrParts, MessageBuilder, ToolCallData};
 
   #[test]
   fn test_usage_add_usage() {

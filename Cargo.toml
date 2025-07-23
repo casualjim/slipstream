@@ -10,13 +10,14 @@ edition = "2024"
 [workspace.dependencies]
 arrow = "55.2"
 arrow-array = "55.2"
-
+mockall = "0.13.1"
 assert_cmd = "2.0.17"
 async-openai = { git = "https://github.com/casualjim/async-openai", branch = "reqwest-middleware", default-features = false, features = [
   "rustls-webpki-roots",
 ] }
 async-stream = "0.3.6"
 async-trait = "0.1"
+base64 = "0.22.1"
 color-backtrace = "0.7.0"
 
 color-eyre = "0.6"
@@ -61,7 +62,7 @@ reqwest-tracing = { version = "0.5.8", features = ["opentelemetry_0_30"] }
 
 schemars = { version = "1.0.4", features = ["jiff02", "either1", "uuid1"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
-serde = "1.0.219"
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.141"
 tempfile = "3.20.0"
 

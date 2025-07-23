@@ -72,6 +72,7 @@ impl MetaDb {
     Ok(db)
   }
 
+  #[cfg(test)]
   pub(super) async fn create_empty_table(
     &self,
     table_name: &str,
@@ -95,19 +96,6 @@ impl MetaDb {
     >,
   ) -> Result<()> {
     f(&self.conn).await
-  }
-
-  /// Execute a query builder function that needs access to the underlying connection
-  /// This is used for IndexThenStore operations where hydrators need to build queries
-  pub async fn execute_query_builder<F, R>(&self, f: F) -> Result<R>
-  where
-    F: FnOnce(&lancedb::Connection) -> Result<R> + Send,
-  {
-    f(&self.conn)
-  }
-
-  pub fn open_table(&self, table_name: &str) -> lancedb::connection::OpenTableBuilder {
-    self.conn.open_table(table_name)
   }
 
   /// Execute a query on a table and return a stream of RecordBatches
@@ -236,21 +224,6 @@ impl MetaDb {
     Ok(table.version().await?)
   }
 
-  /// Checkout a specific version of a table (for rollback)
-  pub async fn checkout_table_version(&self, table_name: &str, version: u64) -> Result<()> {
-    let table = self.conn.open_table(table_name).execute().await?;
-    table.checkout(version).await?;
-    Ok(())
-  }
-
-  /// Restore table to create new version with old data (roll-forward rollback)
-  /// NOTE: This must be called on the same table instance that had checkout called on it
-  pub async fn restore_table(&self, table_name: &str) -> Result<()> {
-    let table = self.conn.open_table(table_name).execute().await?;
-    table.restore().await?;
-    Ok(())
-  }
-
   /// Perform a 2PC rollback by checking out a version and restoring
   /// This creates a new version with the old data (roll-forward approach)
   pub async fn rollback_to_version(&self, table_name: &str, version: u64) -> Result<()> {
@@ -349,17 +322,6 @@ impl Drop for MetaDb {
       });
     }
   }
-}
-
-/// Mode for saving data to LanceDB
-#[derive(Clone, Debug)]
-pub enum SaveMode {
-  /// Create a new table (fails if exists)
-  Create,
-  /// Append to existing table
-  Append,
-  /// Merge insert (upsert) on specified columns
-  MergeInsert { on_columns: Vec<String> },
 }
 
 #[cfg(test)]

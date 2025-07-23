@@ -60,11 +60,6 @@ pub struct Config {
   /// (see https://letsencrypt.org/docs/staging-environment/)
   pub production: bool,
 
-  /// Use Let's Encrypt production environment
-  /// (see https://letsencrypt.org/docs/staging-environment/)
-  // #[clap(long, require_equals=true, default_value_t = TlsMode::None, default_missing_value="none", value_parser)]
-  // tls_mode: TlsMode,
-
   /// The private key when tls-mode is keypair
   pub tls_key: Option<PathBuf>,
 

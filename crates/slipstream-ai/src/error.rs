@@ -1,3 +1,6 @@
+use std::num::ParseIntError;
+use validator::ValidationError;
+
 pub type Result<T, E = Error> = eyre::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
@@ -6,6 +9,38 @@ pub enum Error {
   RateLimitExceeded,
   #[error("Refusal: {0}")]
   Refusal(String),
-  #[error("Empty response: {0}")]
-  EmptyResponse(String),
+  #[error("openai: {0}")]
+  OpenAI(#[from] async_openai::error::OpenAIError),
+  #[error("{0}")]
+  Validation(#[from] ValidationError),
+  #[error("serde: {0}")]
+  Serde(#[from] serde_json::Error),
+  #[error("No choices returned from AI model")]
+  NoChoices,
+  #[error("Function name '{0}' is not a valid identifier")]
+  FunctionNotFound(String),
+  #[error("Function name '{0}' does not have a handler defined")]
+  FunctionHandlerNotFound(String),
+  #[error("io: {0}")]
+  Io(#[from] std::io::Error),
+  #[error("Agent tool error: {0}")]
+  AgentTool(String),
+  #[error("{0}")]
+  ParseInt(#[from] ParseIntError),
+}
+
+impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
+  fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
+    Error::AgentTool(err.to_string())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use ctor::ctor;
+
+  #[ctor]
+  fn init_test_env() {
+    color_backtrace::install();
+  }
 }

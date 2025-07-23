@@ -10,9 +10,6 @@ use std::pin::Pin;
 /// Type alias for a boxed stream of results
 pub type ResultStream<T> = Pin<Box<dyn Stream<Item = Result<T>> + Send>>;
 
-/// Type alias for a record batch stream
-pub type RecordBatchStream = Pin<Box<dyn Stream<Item = Result<RecordBatch>> + Send>>;
-
 /// Common transformer utilities
 pub mod common {
   use super::*;
@@ -111,7 +108,7 @@ pub mod record_batch {
 
   /// Transforms a RecordBatch stream into a stream of typed objects
   pub fn to_typed_stream<T: FromRecordBatchRow + Send + 'static>()
-  -> impl FnOnce(RecordBatchStream) -> ResultStream<T> {
+  -> impl FnOnce(ResultStream<RecordBatch>) -> ResultStream<T> {
     |batch_stream| {
       Box::pin(async_stream::try_stream! {
           let mut batch_stream = std::pin::pin!(batch_stream);
@@ -129,7 +126,7 @@ pub mod record_batch {
   pub fn to_keyed_stream<K, V>(
     key_extractor: impl Fn(&arrow_array::RecordBatch, usize) -> Result<K> + Send + 'static,
     value_extractor: impl Fn(&arrow_array::RecordBatch, usize) -> Result<V> + Send + 'static,
-  ) -> impl FnOnce(RecordBatchStream) -> Pin<Box<dyn Stream<Item = Result<(K, V)>> + Send>>
+  ) -> impl FnOnce(ResultStream<RecordBatch>) -> Pin<Box<dyn Stream<Item = Result<(K, V)>> + Send>>
   where
     K: Send + 'static,
     V: Send + 'static,
@@ -152,7 +149,7 @@ pub mod record_batch {
   /// Transforms a RecordBatch stream by applying a filter
   pub fn filter_stream<T: FromRecordBatchRow + Send + 'static>(
     predicate: impl Fn(&T) -> bool + Send + 'static,
-  ) -> impl FnOnce(RecordBatchStream) -> ResultStream<T> {
+  ) -> impl FnOnce(ResultStream<RecordBatch>) -> ResultStream<T> {
     move |batch_stream| {
       Box::pin(async_stream::try_stream! {
           let mut batch_stream = std::pin::pin!(batch_stream);
@@ -170,7 +167,7 @@ pub mod record_batch {
   }
 
   /// Counts total rows in a RecordBatch stream
-  pub fn count_rows() -> impl FnOnce(RecordBatchStream) -> ResultStream<usize> {
+  pub fn count_rows() -> impl FnOnce(ResultStream<RecordBatch>) -> ResultStream<usize> {
     |batch_stream| {
       Box::pin(async_stream::try_stream! {
           use futures::StreamExt;
@@ -188,7 +185,7 @@ pub mod record_batch {
   /// Transforms a RecordBatch stream with distance scores for vector search results
   pub fn with_similarity_scores<T: FromRecordBatchRow + Send + 'static>(
     threshold: Option<f32>,
-  ) -> impl FnOnce(RecordBatchStream) -> ResultStream<(T, f32)> {
+  ) -> impl FnOnce(ResultStream<RecordBatch>) -> ResultStream<(T, f32)> {
     move |batch_stream| {
       Box::pin(async_stream::try_stream! {
           let mut batch_stream = std::pin::pin!(batch_stream);

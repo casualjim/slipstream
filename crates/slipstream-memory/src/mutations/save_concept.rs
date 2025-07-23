@@ -46,6 +46,12 @@ mod tests {
     let config = slipstream_store::Config::new_test(data_dir);
     let db = Database::new(&config).await.unwrap();
 
+    db.execute(RunConceptMigration {
+      embedding_function_name: config.embedding.provider.clone(),
+    })
+    .await
+    .expect("Failed to run migrations");
+
     // Create a test concept
     let test_uuid = Uuid::now_v7();
     let now = Timestamp::now();
