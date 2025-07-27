@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Build Slipstream"
+
+echo "🚀 Starting Slipstream build..."
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+cargo build --release --workspace
+for worker in workers/*; do
+  echo "🚀 Building worker: $worker..."
+  cd "${proj_dir}/${worker}"
+  bun run typecheck
+done
+echo "✅ Slipstream build complete!"

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Format Slipstream code files"
+
+echo "✨ Starting Slipstream code formatting..."
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+mise format:js
+mise format:rust
+
+echo "✅ Slipstream code formatting complete!"

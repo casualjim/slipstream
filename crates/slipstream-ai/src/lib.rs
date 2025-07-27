@@ -1,20 +1,21 @@
+mod accumulator;
 mod agent;
 mod completer;
 mod embedder;
 mod error;
 mod events;
+mod executor;
 mod reranker;
 
 use std::{pin::Pin, sync::Arc};
 
+pub use accumulator::{FinishedToolCall, JustFinished, StreamAccumulator};
 use async_trait::async_trait;
 pub use error::{Error, Result};
 use futures::Stream;
 use secrecy::SecretString;
 
-use events::StreamEvent;
 use slipstream_core::messages::{self, Aggregator};
-use tokio::sync::broadcast::Sender;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
@@ -65,8 +66,8 @@ pub struct CompletionParams<'a> {
   pub run_id: Uuid,
   pub agent: Arc<dyn Agent>,
   pub session: &'a mut Aggregator,
-  pub sender: Sender<StreamEvent>,
   pub tool_choice: Option<String>,
+  pub stream: bool,
 }
 
 #[async_trait]

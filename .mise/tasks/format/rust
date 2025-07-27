@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Format Slipstream rust code files"
+#MISE sources=["**/Cargo.toml", "**/*.rs"]
+
+echo "🦀 Formatting Rust code files..."
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+# Enable globstar for recursive globbing
+shopt -s globstar
+rustfmt --edition 2024 crates/**/*.rs
+echo "Rust code formatted successfully"
+mise sort-deps
+echo "Dependencies sorted successfully"
+echo "✅ Rust code formatting complete!"

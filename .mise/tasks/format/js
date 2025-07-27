@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Format Slipstream JS/TS code files"
+#MISE sources=["**/*.js", "**/*.ts", "**/*.tsx", "**/*.jsx", "**/*.json", "**/*.jsonc", "**/*.css", "**/*.graphql"]
+
+echo "💅 Formatting JavaScript/TypeScript files..."
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+biome format --write
+echo "✅ JavaScript/TypeScript formatting complete!"

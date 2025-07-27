@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Test Slipstream (debug)"
+
+echo "🧪 Starting Slipstream tests (debug mode)..."
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+if [[ $# -eq 0 ]]; then
+  cargo nextest run --workspace --no-fail-fast "$@"
+else
+  cargo nextest run --no-fail-fast "$@"
+fi
+
+echo "✅ Slipstream tests complete!"

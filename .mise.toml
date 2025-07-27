@@ -11,6 +11,7 @@ mkcert = "latest"
 bun = "latest"
 "cargo:j178/prefligit" = "rev:781b6ac45ca84350682d34ed2312914abd15e31f"
 "cargo:cargo-sort" = "latest"
+node = "latest"
 
 [env]
-_.file = ".env"
+_.file = ".dev.vars"

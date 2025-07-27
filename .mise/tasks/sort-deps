@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
+set -eu -o pipefail
+
 #MISE description="Sort the dependencies in the dependency manifest files"
+#MISE sources=["**/Cargo.toml"]
+#
+echo "🗂️ Sorting dependencies..."
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
 cargo sort --workspace
+echo "✅ Dependencies sorted successfully!"

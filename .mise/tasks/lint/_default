@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
+set -eu -o pipefail
+
 #MISE description="Lint Slipstream"
+
+echo "🔍 Starting Slipstream linting..."
 
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
 prefligit run --all-files
+
+echo "✅ Slipstream linting complete!"

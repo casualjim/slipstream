@@ -127,7 +127,7 @@ Refer to the detailed sections below for more information on each step
 - Inform the user with a concise sentence before creating or editing a file.
 - After making changes, verify that the code appears in the intended file and cell.
 
-> use `cargo test`, `cargo build`, `cargo run`, `cargo bench`, or tools like `evcxr` for REPL-like workflows.
+> use `cargo nextest`, `cargo build`, `cargo run`, `cargo bench`, or tools like `evcxr` for REPL-like workflows.
 
 ## 9. Debugging
 - Use logging (`tracing`, `log`) or macros like `dbg!()` to inspect state.

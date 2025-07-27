@@ -1,5 +1,5 @@
 use std::num::ParseIntError;
-use validator::ValidationError;
+use validator::ValidationErrors;
 
 pub type Result<T, E = Error> = eyre::Result<T, E>;
 
@@ -12,7 +12,7 @@ pub enum Error {
   #[error("openai: {0}")]
   OpenAI(#[from] async_openai::error::OpenAIError),
   #[error("{0}")]
-  Validation(#[from] ValidationError),
+  Validation(#[from] ValidationErrors),
   #[error("serde: {0}")]
   Serde(#[from] serde_json::Error),
   #[error("No choices returned from AI model")]
@@ -27,6 +27,8 @@ pub enum Error {
   AgentTool(String),
   #[error("{0}")]
   ParseInt(#[from] ParseIntError),
+  #[error("Unknown provider: {0}")]
+  UnknownProvider(String),
 }
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for Error {

@@ -10,3 +10,5 @@
 .mcp.json.bak
 mcp.json
 .claude/settings.local.json
+.*.vars
+*.log

@@ -5,7 +5,8 @@
     "workers/*"
   ],
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "uuid": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"

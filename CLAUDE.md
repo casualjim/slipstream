@@ -1,146 +1,255 @@
-# CLAUDE.md
+# Slipstream Rust Project Overview
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This document provides a comprehensive overview of the Slipstream project's Rust components, including architecture, key modules, and implementation details. Slipstream is an agentic compute and state cloud built with Rust, exposing a REST API with a focus on temporal knowledge graph systems.
 
-## Project Overview
+## Project Architecture
 
-Slipstream is an agentic compute and state cloud built in Rust that exposes a REST API. It implements a temporal knowledge graph system with high-performance dual-database architecture.
+Slipstream follows a modular monolith architecture with a Rust workspace containing multiple crates:
 
-## Common Development Commands
+1. **slipstream-core** - Core data structures and messaging components
+2. **slipstream-ai** - Agent orchestration and AI integration
+3. **slipstream-memory** - Temporal knowledge graph with dual-database architecture
+4. **slipstream-store** - Low-level database abstractions and utilities
+5. **slipstream-server** - REST API server implementation
+6. **slipstream-metadata** - Agent/tool registry types
 
-The project uses [mise](https://mise.jdx.dev/) for task management. Common tasks include:
+## Key Technologies
 
-```bash
-# Build the project
-mise build
+- **Backend Framework**: Rust with Tokio async runtime
+- **Web Framework**: Axum for REST API
+- **Databases**: 
+  - KuzuDB (graph database for indexing)
+  - LanceDB (vector database for storage)
+- **Serialization**: Serde for JSON serialization/deserialization
+- **AI Integration**: async-openai for OpenAI-compatible APIs
+- **Observability**: Tracing, OpenTelemetry
+- **Testing**: tokio-test, mockall
 
-# tests
-mise test
+## Core Components
 
-# Format code
-mise format
+### 1. slipstream-core
 
+This crate provides fundamental data structures for the Slipstream system:
+
+- **Definitions**: Model definitions, agent configurations, and tool specifications
+- **Messages**: Comprehensive message system for agent communication with:
+  - Content and assistant message types
+  - Text, image, audio, and video content parts
+  - Request/response message envelopes with metadata
+- **Registry**: Trait definitions for agent, model, and tool registries
+
+### 2. slipstream-ai
+
+Implements agent orchestration and AI integration:
+
+- **Agents**: Agent trait and implementations with instructions, tools, and model configurations
+- **Completers**: AI model completion interfaces
+- **Embedders**: Text embedding generation
+- **Rerankers**: Result reranking capabilities
+- **Events**: Event system for agent communication
+- **Executors**: Task execution mechanisms
+
+### 3. slipstream-memory
+
+Implements a temporal knowledge graph system with dual-database architecture:
+
+- **Nodes**: Interaction, Concept, and Theme node types
+- **Edges**: Relationships between nodes (Mentions, Relates, Includes)
+- **Engine**: Core memory engine coordinating both databases
+- **Migrations**: Database schema migration system
+- **Mutations**: Data modification operations
+- **Queries**: Data retrieval operations
+- **Service**: High-level interaction interfaces
+
+Architecture:
+```
+┌─────────────┐    ┌─────────────┐
+│   GraphDB   │    │  Vector DB  │
+│   (KuzuDB)  │◄──►│  (LanceDB)  │
+│   [Index]   │    │ [Source]    │
+└─────────────┘    └─────────────┘
+       │                  │
+       └──────────────────┘
+              2PC
 ```
 
-### Manual Commands
+### 4. slipstream-store
 
-If running commands directly without mise:
+Provides low-level database abstractions:
 
-#### Build
+- **Database**: Unified interface for KuzuDB and LanceDB operations
+- **Operations**: Query and mutation operation definitions
+- **Traits**: Database command and execution traits
+- **Graph**: KuzuDB integration
+- **Meta**: LanceDB integration
+- **Streams**: Result streaming utilities
+
+Key features:
+- 2-Phase Commit (2PC) protocol for consistency
+- Automatic rollback and version-based recovery
+- Async architecture with MVCC (Multi-Version Concurrency Control)
+
+### 5. slipstream-server
+
+REST API server implementation:
+
+- **App State**: Shared application state with memory engine
+- **Routes**: API endpoint definitions
+- **Server**: HTTP server configuration and startup
+- **Models**: API data transfer objects
+
+### 6. slipstream-metadata
+
+Agent/tool registry types:
+
+- Agent configurations
+- Tool definitions
+
+## Data Model
+
+### Node Types
+
+1. **Interaction** (formerly Episode): Temporal data points representing events, messages, or observations
+2. **Concept** (formerly Entity): Real-world entities with attributes and vector embeddings
+3. **Theme** (formerly Community): Clusters of related concepts forming semantic groups
+
+### Edge Types
+
+1. **Mentions**: Links Interactions to referenced Concepts
+2. **Relates**: Fact-based relationships between Concepts with temporal validity
+3. **Includes**: Membership relationships from Themes to Concepts
+
+## Key Implementation Details
+
+### Database Architecture
+
+Slipstream uses a dual-database architecture for optimal performance:
+
+- **KuzuDB** serves as a high-performance index for graph traversals and complex queries
+- **LanceDB** acts as the source of truth storing complete data with embeddings
+
+The system implements a 2-Phase Commit (2PC) protocol to ensure consistency across both databases.
+
+### Message System
+
+The messaging system provides a rich, typed interface for agent communication with:
+- Support for various content types (text, images, audio, video)
+- Request/response patterns
+- Tool calling and responses
+- Message metadata (timestamps, sender info)
+
+### Agent System
+
+Agents are defined with:
+- Instructions and system messages
+- Available tools with schemas
+- Model configurations
+- Response schemas for structured output
+
+### 2-Phase Commit Implementation
+
+The 2PC implementation ensures atomic operations across both databases:
+1. Begin KuzuDB transaction (serializes write transactions)
+2. Execute GraphDB operations within the transaction
+3. Execute LanceDB operations (auto-commits)
+4. If GraphDB fails after LanceDB succeeded, rollback LanceDB
+5. Commit or rollback KuzuDB based on success/failure
+
+## Getting Started
+
+### Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Bun](https://bun.sh/docs/installation)
+- [Mise](https://mise.jdx.dev/getting-started.html)
+
+### Installation
+
+1.  **Install tools:**
+    ```bash
+    mise install
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    cargo fetch
+    bun install
+    ```
+
+### Building
+
+To build the entire project, including the Rust workspace and type-checking the workers, run:
 ```bash
-# Build all crates in the workspace
-cargo build
-
-# Build in release mode
-cargo build --release
-
-# Build a specific crate
-cargo build -p slipstream-server
+mise run build
 ```
 
-### Test
+To build only the Rust components, run:
 ```bash
-# Run all tests
-cargo nextest run
-
-# Run tests for a specific crate
-cargo nextest run -p slipstream-memory
-
-# Run a specific test
-cargo nextest run test_name
-
-# Run tests with output displayed
-cargo nextest run --no-capture
+mise run build:rust
 ```
 
-### Lint & Format
+### Testing
+
+To run all tests for the project:
 ```bash
-# Format code (uses rustfmt.toml with max_width=100, tab_spaces=2)
-# WARNING: Do NOT use `cargo fmt` - it's forbidden. Use rustfmt directly:
-rustfmt **/*.rs
-
-# Check formatting without applying changes
-rustfmt --check **/*.rs
-
-# Run all linters and formatters (includes rustfmt, clippy, and more)
-prefligit run --all-files
-
-# This also runs automatically as a pre-commit hook
+mise run test
 ```
 
-### Run Server
+To run only the tests for the workers:
 ```bash
-# Run the server in development mode
-cargo run -p slipstream-server
-
-# Run with hot-reload during development
-systemfd --no-pid -s http::8080 -s https::8443 -- cargo watch -x "run -p slipstream-server"
+mise run test:workers
 ```
 
-## High-Level Architecture
+To test only the Rust components:
+```bash
+mise run test:rust
+```
 
-### Workspace Structure
-The project uses a Rust workspace with the following crates:
+To test a single rust crate:
+```bash
+mise run test:rust --package <crate_name>
+```
 
-- **slipstream-core**: Core types and utilities shared across all crates
-- **slipstream-store**: Dual-database architecture (KuzuDB + LanceDB) with low-level storage abstractions
-- **slipstream-memory**: Temporal knowledge graph implementation built on top of slipstream-store
-- **slipstream-ai**: Agent system providing agentic interactions, embeddings for ingestion/search, and reranking
-- **slipstream-metadata**: Metadata management
-- **slipstream-server**: REST API server built with Axum
+### Running
 
-### Key Architectural Decisions
+To run the Slipstream server:
+```bash
+cargo run --package slipstream-server
+```
 
-1. **Dual-Database Architecture** (slipstream-store):
-   - **KuzuDB**: High-performance graph database for fast queries and traversals
-   - **LanceDB**: Vector database serving as source of truth with embeddings storage
-   - 2-Phase Commit protocol ensures consistency across both databases
-   - Automatic rollback and version-based recovery
+### Linting and Formatting
 
-2. **Server Architecture** (slipstream-server):
-   - Built with Axum web framework
-   - OpenAPI documentation auto-generated with aide
-   - TLS support with Let's Encrypt or custom certificates
-   - OpenTelemetry integration for observability
-   - Graceful shutdown handling
+The project uses mise tasks for linting and formatting:
 
-3. **Data Model**:
-   - **Nodes**: Interactions (events), Concepts (entities), Themes (concept clusters)
-   - **Edges**: Mentions, Relates (temporal facts), Includes (membership)
-   - All data is temporal with versioning and validity periods
-   - Group isolation for multi-tenant scenarios
+**Linting:**
+- To run all linters: `mise run lint`
+- To lint only Rust: `mise run lint:rust`
 
-### Key Dependencies
-- **Web**: axum, tower-http, aide (OpenAPI)
-- **Databases**: kuzu (graph), lancedb (vector)
-- **Async**: tokio, futures
-- **Serialization**: serde, serde_json
-- **Time**: jiff (modern date/time handling)
-- **Observability**: opentelemetry, tracing
+**Formatting:**
+- To format all code: `mise run format`
+- To format only Rust: `mise run format:rust`
 
-### Development Guidelines
+## Development Guidelines
 
-1. **Error Handling**: Use `eyre` for application errors, `thiserror` for library errors
-2. **Async Code**: All async code uses tokio runtime
-3. **Time Handling**: Use `jiff` for all timestamp operations (not chrono)
-4. **IDs**: Use UUID v7 for time-ordered identifiers
-5. **Formatting**: Code is formatted with 2-space indentation, 120-char line width
+1. Follow Rust best practices and idioms
+2. Use async/await for all I/O operations
+3. Implement proper error handling with `eyre::Result`
+4. Write comprehensive tests for new features
+5. Document public APIs with rustdoc comments
+6. Follow the existing code style and patterns
 
-### Testing Approach
-- Unit tests are colocated with source files
-- Integration tests in `src/*_tests.rs` files
-- Use `tempfile` for test databases
-- Mock external services when possible
-- Use `cargo nextest` instead of `cargo test`
+## Testing Strategy
 
-### Pre-commit Integration
-The project uses pre-commit hooks via `prefligit`:
-- Runs automatically before commits
-- Includes rustfmt, clippy, and other checks
-- Manual run: `prefligit run --all-files`
+The project uses a comprehensive testing approach:
+- Unit tests for individual components
+- Integration tests for cross-component functionality
+- Property-based testing where applicable
+- Mocking for external dependencies
+- Concurrent testing for database operations
 
-### Important Notes from Instructions
-- **Code on Request Only**: Provide explanations by default, code only when explicitly asked
-- **Minimal Changes**: When modifying code, change only what's necessary
-- **Preserve Existing Code**: Respect existing patterns and structure
-- **Direct Editing**: When asked to modify code, edit files directly rather than providing snippets
+## Observability
+
+The system includes comprehensive tracing and logging:
+- Structured logging with tracing
+- OpenTelemetry integration
+- Error reporting with color-backtrace in development

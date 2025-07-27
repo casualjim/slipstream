@@ -1,0 +1,30 @@
+#!/usr/bin/env zsh
+
+set -eu -o pipefail
+
+#MISE description="Test Slipstream Workers, pass a project name to build a single project"
+
+echo "👷 Starting Slipstream worker tests..."
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+bun_test() {
+  echo "🚀 Testing worker: $1..."
+  cd "${proj_dir}"
+  worker_dir="$1"
+  shift
+  bun run --cwd="${worker_dir}" test "$@"
+}
+
+if [ $# -eq 0 ]; then
+  echo "🧪 No project name provided. Testing all workers..."
+  for worker in workers/*; do
+    echo "Testing $worker"
+    bun_test "${worker}" "$@"
+  done
+else
+  worker_dir="$1"
+  shift
+  bun_test "workers/${worker_dir}" "$@"
+fi

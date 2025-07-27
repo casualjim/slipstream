@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Lint Slipstream"
+#MISE sources=["**/Cargo.toml", "**/*.rs"]
+
+echo "🔎 Linting Rust code with Clippy..."
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+cargo clippy --all-targets --workspace -- -D warnings "$@"
+echo "✅ Rust linting complete!"

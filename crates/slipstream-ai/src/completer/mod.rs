@@ -1,14 +1,19 @@
 mod openailike;
 
-use std::pin::Pin;
-
 use async_trait::async_trait;
-use futures::Stream;
+use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
 
-use crate::{CompletionParams, events::StreamEvent};
-use eyre::Result;
+use crate::{CompletionParams, ResultStream, events::StreamEvent};
+
+#[derive(Debug, Clone, TypedBuilder, Default, Serialize, Deserialize)]
+pub struct StructuredOutput {
+  pub name: String,
+  pub description: String,
+  pub parameters: schemars::Schema,
+}
 
 #[async_trait]
-pub trait Completer {
+pub trait Completer: Send + Sync {
   async fn chat_completion<'a>(&self, params: CompletionParams<'a>) -> ResultStream<StreamEvent>;
 }

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+#MISE description="Test Slipstream Rust (release)"
+#MISE sources=["**/Cargo.toml", "**/*.rs"]
+#
+echo "🧪 Starting Slipstream Rust 🦀 tests (release mode)..."
+
+proj_dir=$(git rev-parse --show-toplevel)
+cd "$proj_dir" || exit 1
+
+cargo nextest run --release --workspace --no-fail-fast --no-capture
+
+echo "✅ Slipstream Rust 🦀 tests complete!"
