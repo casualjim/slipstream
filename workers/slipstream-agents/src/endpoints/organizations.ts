@@ -115,6 +115,8 @@ export class ListOrganizations extends D1ListEndpoint<HandleArgs> {
     ...readOnlyMeta,
   };
   filterFields = ["name", "slug"];
-
-  // For now, use default list behavior
+  searchFields = ["name", "description"];
+  // @ts-ignore - chanfana has poor type definitions
+  orderByFields = ["name", "createdAt", "updatedAt"];
+  defaultOrderBy = "name";
 }

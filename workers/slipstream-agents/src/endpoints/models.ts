@@ -75,5 +75,11 @@ export class GetModel extends D1ReadEndpoint<HandleArgs> {
 export class ListModels extends D1ListEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = modelMeta;
+  // @ts-ignore - chanfana has poor type definitions
   filterFields = ["provider", "name"];
+  // @ts-ignore - chanfana has poor type definitions
+  searchFields = ["name", "description"];
+  // @ts-ignore - chanfana has poor type definitions
+  orderByFields = ["name", "provider", "createdAt"];
+  defaultOrderBy = "name";
 }

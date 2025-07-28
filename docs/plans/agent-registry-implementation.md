@@ -141,22 +141,22 @@ import { HTTPException } from 'hono/http-exception';
 
 export const bearerAuth: MiddlewareHandler = async (c, next) => {
   const auth = c.req.header('Authorization');
-  
+
   if (!auth?.startsWith('Bearer ')) {
     throw new HTTPException(401, { message: 'Unauthorized' });
   }
-  
+
   const token = auth.substring(7);
   if (token !== c.env.API_KEY) {
     throw new HTTPException(401, { message: 'Invalid API key' });
   }
-  
+
   // Set test user context
   c.set('auth', {
     userId: '01983d84-2e1d-747d-8e58-fdeb3f5d241d',
     organizations: ['01983d7a-1baa-7069-842a-6815dbfaf38b']
   });
-  
+
   await next();
 };
 ```
@@ -188,7 +188,7 @@ export class OrganizationService {
 
   async findByIds(ids: string[]) {
     if (!ids.length) return { results: [] };
-    
+
     const placeholders = ids.map(() => '?').join(',');
     return await this.db
       .prepare(`SELECT * FROM organizations WHERE id IN (${placeholders})`)
@@ -243,13 +243,13 @@ export class ToolService {
 
   async validateIds(toolIds: string[]): Promise<boolean> {
     if (!toolIds.length) return true;
-    
+
     const placeholders = toolIds.map(() => '?').join(',');
     const result = await this.db
       .prepare(`SELECT COUNT(*) as count FROM tools WHERE id IN (${placeholders})`)
       .bind(...toolIds)
       .first();
-    
+
     return result?.count === toolIds.length;
   }
 }
@@ -267,19 +267,19 @@ export class AgentService {
     let query = 'SELECT * FROM agents WHERE orgId IN (';
     const placeholders = orgIds.map(() => '?').join(',');
     query += placeholders + ')';
-    
+
     const params = [...orgIds];
-    
+
     if (filters?.orgId) {
       query += ' AND orgId = ?';
       params.push(filters.orgId);
     }
-    
+
     if (filters?.projectId) {
       query += ' AND projectId = ?';
       params.push(filters.projectId);
     }
-    
+
     return await this.db
       .prepare(query)
       .bind(...params)
@@ -299,7 +299,7 @@ export class AgentService {
 ### 5. Organization Endpoints (`src/endpoints/organizations.ts`)
 
 ```typescript
-import { D1CreateEndpoint, D1ReadEndpoint, D1UpdateEndpoint, 
+import { D1CreateEndpoint, D1ReadEndpoint, D1UpdateEndpoint,
          D1DeleteEndpoint, D1ListEndpoint } from 'chanfana';
 import { HTTPException } from 'hono/http-exception';
 import { OrganizationSchema } from '../types';
@@ -316,11 +316,11 @@ const orgMeta = {
 
 export class CreateOrganization extends D1CreateEndpoint {
   _meta = orgMeta;
-  
+
   async before(c) {
     const data = await this.getValidatedData();
     data.body.id = uuidv7();
-    
+
     // ALL database queries through service
     const service = new OrganizationService(c.env.DB);
     if (await service.checkSlugExists(data.body.slug)) {
@@ -331,11 +331,11 @@ export class CreateOrganization extends D1CreateEndpoint {
 
 export class GetOrganization extends D1ReadEndpoint {
   _meta = orgMeta;
-  
+
   async before(c) {
     const auth = c.get('auth');
     const { id } = c.req.param();
-    
+
     if (!auth.organizations.includes(id)) {
       throw new HTTPException(403, { message: 'Access denied' });
     }
@@ -344,11 +344,11 @@ export class GetOrganization extends D1ReadEndpoint {
 
 export class UpdateOrganization extends D1UpdateEndpoint {
   _meta = orgMeta;
-  
+
   async before(c) {
     const auth = c.get('auth');
     const { id } = c.req.param();
-    
+
     if (!auth.organizations.includes(id)) {
       throw new HTTPException(403, { message: 'Access denied' });
     }
@@ -357,15 +357,15 @@ export class UpdateOrganization extends D1UpdateEndpoint {
 
 export class DeleteOrganization extends D1DeleteEndpoint {
   _meta = orgMeta;
-  
+
   async before(c) {
     const { id } = c.req.param();
-    
+
     // ALL database queries through service
     const service = new OrganizationService(c.env.DB);
     if (await service.hasProjects(id)) {
-      throw new HTTPException(400, { 
-        message: 'Cannot delete organization with existing projects' 
+      throw new HTTPException(400, {
+        message: 'Cannot delete organization with existing projects'
       });
     }
   }
@@ -374,13 +374,13 @@ export class DeleteOrganization extends D1DeleteEndpoint {
 export class ListOrganizations extends D1ListEndpoint {
   _meta = {
     ...orgMeta,
-    filterFields: ['name', 'slug']
   };
-  
+  filterFields = ['name', 'slug'];
+
   // Override list to filter by user's organizations
   async list(c) {
     const auth = c.get('auth');
-    
+
     // ALL database queries through service
     const service = new OrganizationService(c.env.DB);
     return await service.findByIds(auth.organizations);
@@ -391,7 +391,7 @@ export class ListOrganizations extends D1ListEndpoint {
 ### 6. Agent Endpoints with Validation (`src/endpoints/agents.ts`)
 
 ```typescript
-import { D1CreateEndpoint, D1ReadEndpoint, D1UpdateEndpoint, 
+import { D1CreateEndpoint, D1ReadEndpoint, D1UpdateEndpoint,
          D1DeleteEndpoint, D1ListEndpoint, contentJson } from 'chanfana';
 import { HTTPException } from 'hono/http-exception';
 import { AgentSchema } from '../types';
@@ -408,7 +408,7 @@ const agentMeta = {
 
 export class CreateAgent extends D1CreateEndpoint {
   _meta = agentMeta;
-  
+
   // Custom schema to exclude auto-generated fields
   schema = {
     request: {
@@ -425,34 +425,34 @@ export class CreateAgent extends D1CreateEndpoint {
       )
     }
   };
-  
+
   async before(c) {
     const data = await this.getValidatedData();
     const auth = c.get('auth');
     const service = new ValidationService(c.env.DB);
-    
+
     // Set generated fields
     data.body.id = uuidv7();
     data.body.createdBy = auth.userId;
     data.body.updatedBy = auth.userId;
-    
+
     // Validate access
     if (!auth.organizations.includes(data.body.orgId)) {
       throw new HTTPException(403, { message: 'Access denied to organization' });
     }
-    
+
     // Validate project belongs to org - using service
     const projectService = new ProjectService(c.env.DB);
     if (!await projectService.belongsToOrganization(data.body.projectId, data.body.orgId)) {
       throw new HTTPException(400, { message: 'Project does not belong to organization' });
     }
-    
+
     // Validate model exists - using service
     const modelService = new ModelService(c.env.DB);
     if (!await modelService.exists(data.body.model)) {
       throw new HTTPException(400, { message: 'Invalid model ID' });
     }
-    
+
     // Validate and stringify tools
     if (data.body.availableTools?.length) {
       if (!await service.validateToolIds(data.body.availableTools)) {
@@ -466,26 +466,26 @@ export class CreateAgent extends D1CreateEndpoint {
 export class ListAgents extends D1ListEndpoint {
   _meta = {
     ...agentMeta,
-    filterFields: ['name', 'model', 'orgId', 'projectId'],
-    searchFields: ['name', 'description']
   };
-  
+  filterFields = ['name', 'model', 'orgId', 'projectId'];
+  searchFields = ['name', 'description'];
+
   async list(c) {
     const auth = c.get('auth');
     const { orgId, projectId } = c.req.query();
-    
+
     // ALL database queries through service
     const service = new AgentService(c.env.DB);
     const filters: any = {};
-    
+
     if (orgId && auth.organizations.includes(orgId)) {
       filters.orgId = orgId;
     }
-    
+
     if (projectId) {
       filters.projectId = projectId;
     }
-    
+
     return await service.findByUserOrgs(auth.organizations, filters);
   }
 }
@@ -560,7 +560,7 @@ export default app;
 
 ## Development Steps
 
-1. Install dependencies: 
+1. Install dependencies:
    ```bash
    bun add uuid zod hono chanfana
    bun add -d vitest @vitest/ui miniflare wrangler
@@ -574,7 +574,7 @@ export default app;
    # IMPORTANT: Always run dev server in background to keep terminal available
    bun run dev &
    # Or use a separate terminal/tmux session
-   
+
    # To stop the background process later:
    # jobs  # to see background jobs
    # kill %1  # to stop job #1
@@ -611,7 +611,7 @@ describe('OrganizationService', () => {
       await db.prepare('INSERT INTO organizations (id, name, slug) VALUES (?, ?, ?)')
         .bind('test-id', 'Test Org', 'test-slug')
         .run();
-      
+
       const exists = await service.checkSlugExists('test-slug');
       expect(exists).toBe(true);
     });
@@ -749,14 +749,14 @@ import { getMiniflareBindings } from 'miniflare';
 
 export async function createTestDatabase(): Promise<D1Database> {
   const { DB } = getMiniflareBindings();
-  
+
   // Run migrations
   const migrations = await readdir('migrations');
   for (const migration of migrations.sort()) {
     const sql = await readFile(`migrations/${migration}`, 'utf-8');
     await DB.exec(sql);
   }
-  
+
   return DB;
 }
 

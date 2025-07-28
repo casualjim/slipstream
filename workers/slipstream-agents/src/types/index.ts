@@ -65,7 +65,7 @@ const jsonArray = z.string().transform((val) => {
 export const OrganizationSchema = z.object({
   slug: z.string().regex(/^[A-Za-z0-9-]{3,}$/),
   name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
-  description: z.string().nullish(),
+  description: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -107,6 +107,7 @@ export const CreateToolSchema = z.object({
   name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
   description: z.string().optional(),
   arguments: z.record(z.any()).optional(), // JSON Schema object
+
 });
 
 // Schema for updating tools - excludes primary keys

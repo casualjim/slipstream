@@ -1,39 +1,39 @@
 # Agent Registry API Implementation
 
-## Objective  
-Create an agent registry API using a Hono API server with [Chanfana](https://chanfana.pages.dev/introduction) for OpenAPI support and Cloudflare D1 integration via auto endpoints (https://chanfana.pages.dev/endpoints/auto/d1). Define data structures to store agent configurations.  
+## Objective
+Create an agent registry API using a Hono API server with [Chanfana](https://chanfana.pages.dev/introduction) for OpenAPI support and Cloudflare D1 integration via auto endpoints (https://chanfana.pages.dev/endpoints/auto/d1). Define data structures to store agent configurations.
 
 All endpoints must implement bearer token authentication using API keys for secure access.
 
 ---
 
-## Data Structures  
+## Data Structures
 Use the following TypeScript interfaces for all schemas. Ensure validation and constraints are enforced in the via the D1AutoEndpoint functionality with chafana and a strict database schema that has exhaustive constraints.
 
 You MUST read the d1 auto endpoints docs from chanfana: https://chanfana.pages.dev/endpoints/auto/d1
 
-### Agent  
-```ts  
-import { v7 as uuid7 } from "uuid";  
+### Agent
+```ts
+import { v7 as uuid7 } from "uuid";
 
-export interface Agent {  
-  id: string; // uuid7, readonly  
-  name: string; // required  
-  description?: string; // optional  
-  model: string; // required, must be a known model ID  
-  instructions: string; // required  
-  availableTools?: Tool[]; // optional  
+export interface Agent {
+  id: string; // uuid7, readonly
+  name: string; // required
+  description?: string; // optional
+  model: string; // required, must be a known model ID
+  instructions: string; // required
+  availableTools?: Tool[]; // optional
   version: string; // required
   slug: string; // required [A-Za-z0-9-_]{3,}
-  organization: string; // uuid7, readonly, must be valid organization, user must belong to it  
-  project: string; // uuid7, readonly, must be valid project in accessible organization  
-  createdBy: string; // uuid7, readonly, valid userId  
-  updatedBy: string; // uuid7, readonly, valid userId  
-}  
-```  
+  organization: string; // uuid7, readonly, must be valid organization, user must belong to it
+  project: string; // uuid7, readonly, must be valid project in accessible organization
+  createdBy: string; // uuid7, readonly, valid userId
+  updatedBy: string; // uuid7, readonly, valid userId
+}
+```
 
-### Tool  
-```ts  
+### Tool
+```ts
 export enum ToolProvider {
   Client,
   Local,
@@ -41,25 +41,25 @@ export enum ToolProvider {
   Restate
 }
 
-export interface Tool {  
-  id: string; // uuid7, readonly  
+export interface Tool {
+  id: string; // uuid7, readonly
   slug: string; // required [A-Za-z0-9-_]{3,}
-  name: string; // required  
-  description?: string; // optional  
-  arguments?: object; // valid JSON Schema if present  
+  name: string; // required
+  description?: string; // optional
+  arguments?: object; // valid JSON Schema if present
   version: string;
   provider: ToolProvider; // required
-}  
-```  
+}
+```
 
-### Organization  
+### Organization
 
 ```ts
 export const WAGYU_ORGANIZATION_ID = "01983d7a-1baa-7069-842a-6815dbfaf38b";
 
 export interface Organization {
   id: string; // uuid7, readonly
-  name: string; // required 
+  name: string; // required
   description?: string; // optional
   createdAt: Date; // readonly
   updatedAt: Date; // readonly
@@ -79,7 +79,7 @@ export const organizations: Organization[] = [
 ];
 ```
 
-### Project  
+### Project
 
 ```ts
 export const WAGYU_PROJECT_ID = "01983d7a-930e-72ba-8d1e-6d58f2253e90";
@@ -108,7 +108,7 @@ export const projects: Project[] = [
 ];
 ```
 
-### User  
+### User
 | Property        | Type     | Constraints              |
 | --------------- | -------- | ------------------------ |
 | `id`            | string   | uuid7, required          |
@@ -141,7 +141,7 @@ export const users: User[] = [
 ];
 ```
 
-### ModelProvider  
+### ModelProvider
 
 
 ```ts
@@ -198,7 +198,7 @@ export interface ModelConfiguration {
   capabilities: ModelCapabilities[]; // required to have at least 1, all entries must be valid
   inputModalities: Modalities[]; // required to have at least 1, all entries must be valid
   outputModalities: Modalities[]; // required to have at least 1, all entries must be valid
-  dialect?: APIDialect; // optional 
+  dialect?: APIDialect; // optional
 }
 
 export const modelConfigurations: ModelConfiguration[] = [
@@ -388,8 +388,8 @@ export const modelConfigurations: ModelConfiguration[] = [
 
 ---
 
-## API Endpoints  
-Implement full CRUD operations for all endpoints under `/api/v1/`. All require bearer token API key authentication.  
+## API Endpoints
+Implement full CRUD operations for all endpoints under `/api/v1/`. All require bearer token API key authentication.
 
 | Resource      | Path                    | Operations | Description                 |
 | ------------- | ----------------------- | ---------- | --------------------------- |
@@ -398,44 +398,44 @@ Implement full CRUD operations for all endpoints under `/api/v1/`. All require b
 | Projects      | `/api/v1/projects`      | CRUD       | Manage projects             |
 | Agents        | `/api/v1/agents`        | CRUD       | Manage agent configurations |
 
-- Use Chanfana for OpenAPI support, serving the spec at `/api/v1/openapi.json`.  
-- Endpoints must validate authentication and user permissions (e.g., org access).  
+- Use Chanfana for OpenAPI support, serving the spec at `/api/v1/openapi.json`.
+- Endpoints must validate authentication and user permissions (e.g., org access).
 
 ---
 
-## Implementation Guidelines  
-1. **D1 Auto Endpoints**  
+## Implementation Guidelines
+1. **D1 Auto Endpoints**
    - Simple crud API's like this need very crisp database schemas so that the database takes care of the validation
    - This needs to use [`D1AutoEndpoints` from Chanfana](https://chanfana.pages.dev/endpoints/auto/d1). You MUST review these docs
 
-2. **Authentication**  
-   - Enforce bearer token API key validation on all endpoints.  
-   - Integrate with user/organization checks for access control.  
+2. **Authentication**
+   - Enforce bearer token API key validation on all endpoints.
+   - Integrate with user/organization checks for access control.
 
-3. **Documentation & Grounding**  
-   - Ground solutions in latest documentation using Context7 and available tools (your knowledge cutoff requires this for up-to-date info).  
+3. **Documentation & Grounding**
+   - Ground solutions in latest documentation using Context7 and available tools (your knowledge cutoff requires this for up-to-date info).
 
-4. **Testing**  
-   - Unit tests: Models and API logic.  
-   - Integration tests: Full API endpoints (including auth flows).  
+4. **Testing**
+   - Unit tests: Models and API logic.
+   - Integration tests: Full API endpoints (including auth flows).
 
 5. **File locations**
    - This assignment should be executed in workers/slipstream-agents
 
 ---
 
-## Success Criteria  
-- [ ] API served from `/api/v1` with bearer auth on all endpoints.  
-- [ ] OpenAPI spec served from `/api/v1/openapi.json`.  
-- [ ] All CRUD endpoints defined and functional.  
-- [ ] Unit tests for models.  
-- [ ] Unit tests for API logic.  
-- [ ] Integration tests for API (covering CRUD + auth).  
+## Success Criteria
+- [ ] API served from `/api/v1` with bearer auth on all endpoints.
+- [ ] OpenAPI spec served from `/api/v1/openapi.json`.
+- [ ] All CRUD endpoints defined and functional.
+- [ ] Unit tests for models.
+- [ ] Unit tests for API logic.
+- [ ] Integration tests for API (covering CRUD + auth).
 
-## Avoid  
+## Avoid
 - Cloudflare worker types (use `wrangler types` instead of installing `@cloudflare/workers-types`).
 
-## Resources  
-- [Cloudflare Developers](https://developers.cloudflare.com/llms.txt)  
-- [Hono Framework](https://hono.dev/llms.txt)  
-- [Chanfana Introduction](https://chanfana.pages.dev/introduction)  
+## Resources
+- [Cloudflare Developers](https://developers.cloudflare.com/llms.txt)
+- [Hono Framework](https://hono.dev/llms.txt)
+- [Chanfana Introduction](https://chanfana.pages.dev/introduction)

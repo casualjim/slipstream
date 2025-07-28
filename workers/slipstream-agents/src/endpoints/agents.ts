@@ -2,6 +2,7 @@ import { D1CreateEndpoint, D1DeleteEndpoint, D1ListEndpoint, D1ReadEndpoint, D1U
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { ModelService, ProjectService, ToolService } from "../lib/services";
+import { generateSlug } from "../lib/utils";
 import type { HandleArgs } from "../types";
 import { AgentSchema } from "../types";
 
@@ -45,11 +46,7 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
     const auth = c.get("auth");
 
     // Generate slug from name
-    const slug = data.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .substring(0, 100);
+    const slug = generateSlug(data.name);
 
     // Set generated fields
     data.slug = slug;
@@ -97,11 +94,13 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
       return await super.handle(c);
     } catch (error: any) {
       // Check if it's a unique constraint violation
-      if (error?.message?.includes("UNIQUE constraint failed") ||
-          error?.message?.includes("SQLITE_CONSTRAINT") ||
-          error?.message?.includes("constraint")) {
+      if (
+        error?.message?.includes("UNIQUE constraint failed") ||
+        error?.message?.includes("SQLITE_CONSTRAINT") ||
+        error?.message?.includes("constraint")
+      ) {
         throw new HTTPException(409, {
-          message: "An agent with this name already exists in this organization and project"
+          message: "An agent with this name already exists in this organization and project",
         });
       }
       // Re-throw other errors
@@ -149,13 +148,15 @@ export class UpdateAgent extends D1UpdateEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = {
     ...agentMeta,
-    fields: z.object({
-      name: z.string(),
-      description: z.string().nullish(),
-      model: z.string(),
-      instructions: z.string(),
-      availableTools: z.array(z.string()).nullish(),
-    }).partial(), // Allow partial updates but exclude primary key fields
+    fields: z
+      .object({
+        name: z.string(),
+        description: z.string().nullish(),
+        model: z.string(),
+        instructions: z.string(),
+        availableTools: z.array(z.string()).nullish(),
+      })
+      .partial(), // Allow partial updates but exclude primary key fields
   };
 
   async before(oldObj: Record<string, any>, filters: any): Promise<any> {
@@ -222,17 +223,26 @@ export class ListAgents extends D1ListEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = {
     ...agentMeta,
-    filterFields: ["name", "model", "organization", "project"],
-    searchFields: ["name", "description"],
   };
+
+  filterFields = ["name", "model", "organization", "project"];
+  searchFields = ["name", "description"];
+  // @ts-ignore - chanfana has poor type definitions
+  orderByFields = ["name", "createdAt", "updatedAt"];
+  defaultOrderBy = "createdAt";
 
   async list() {
     const [c] = this.args;
     const auth = c.get("auth");
     const { organization, project, page = 1, per_page = 10 } = c.req.query();
 
+    // Validate pagination parameters
+    const pageNum = Math.max(1, parseInt(String(page), 10));
+    const pageSize = Math.max(1, Math.min(100, parseInt(String(per_page), 10)));
+    const offset = (pageNum - 1) * pageSize;
+
     // Build WHERE clause to filter by user's organizations
-    let whereClause = `organization IN (${auth.organizations.map(() => '?').join(',')})`;
+    let whereClause = `organization IN (${auth.organizations.map(() => "?").join(",")})`;
     const params = [...auth.organizations];
 
     if (organization && auth.organizations.includes(organization)) {
@@ -245,9 +255,18 @@ export class ListAgents extends D1ListEndpoint<HandleArgs> {
       params.push(project);
     }
 
-    const result = await this.getDBBinding()
-      .prepare(`SELECT * FROM agents WHERE ${whereClause}`)
+    // Get total count for pagination metadata
+    const countResult = await this.getDBBinding()
+      .prepare(`SELECT COUNT(*) as total FROM agents WHERE ${whereClause}`)
       .bind(...params)
+      .first();
+
+    const totalCount = countResult?.total || 0;
+
+    // Get paginated results
+    const result = await this.getDBBinding()
+      .prepare(`SELECT * FROM agents WHERE ${whereClause} ORDER BY createdAt DESC LIMIT ? OFFSET ?`)
+      .bind(...params, pageSize, offset)
       .all();
 
     // Transform results to handle JSON fields
@@ -257,11 +276,11 @@ export class ListAgents extends D1ListEndpoint<HandleArgs> {
       result: transformedResults,
       success: true,
       result_info: {
-        page: Number(page),
-        per_page: Number(per_page),
+        page: pageNum,
+        per_page: pageSize,
         count: transformedResults.length,
-        total_count: transformedResults.length,
-        total_pages: 1,
+        total_count: totalCount,
+        total_pages: Math.ceil(Number(totalCount) / pageSize),
       },
     };
   }

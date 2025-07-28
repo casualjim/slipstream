@@ -1,4 +1,4 @@
-import { SELF } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Tool API Integration Tests", () => {
@@ -243,11 +243,14 @@ describe("Tool API Integration Tests", () => {
       });
 
       // Test filtering by exact name
-      const response = await SELF.fetch(`http://local.test/api/v1/tools?name=${encodeURIComponent("Unique Filter Test Tool")}`, {
-        headers: {
-          Authorization: "Bearer test-api-key",
+      const response = await SELF.fetch(
+        `http://local.test/api/v1/tools?name=${encodeURIComponent("Unique Filter Test Tool")}`,
+        {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
         },
-      });
+      );
       const body = await response.json<{ success: boolean; result: any[] }>();
 
       expect(response.status).toBe(200);
@@ -256,6 +259,159 @@ describe("Tool API Integration Tests", () => {
       expect(body.result).toHaveLength(1);
       expect(body.result[0].name).toBe("Unique Filter Test Tool");
       expect(body.result[0].slug).toBe("unique-filter-test");
+    });
+
+    describe("Pagination", () => {
+      let totalToolsCount = 0;
+
+      beforeEach(async () => {
+        // Create multiple tools for pagination testing
+        const tools = [
+          { name: "Tool 1", slug: "tool-1", version: "1.0.0", provider: "Local" },
+          { name: "Tool 2", slug: "tool-2", version: "1.0.0", provider: "Local" },
+          { name: "Tool 3", slug: "tool-3", version: "1.0.0", provider: "Local" },
+          { name: "Tool 4", slug: "tool-4", version: "1.0.0", provider: "Local" },
+          { name: "Tool 5", slug: "tool-5", version: "1.0.0", provider: "Local" },
+        ];
+
+        for (const tool of tools) {
+          await SELF.fetch(`http://local.test/api/v1/tools`, {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer test-api-key",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(tool),
+          });
+        }
+
+        const countResult = await env.DB.prepare("SELECT COUNT(*) AS count FROM tools").first();
+        totalToolsCount = countResult?.count as number || 0;
+      });
+
+      it("should support basic pagination with page and per_page", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?page=1&per_page=2`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result).toBeInstanceOf(Array);
+        expect(body.result).toHaveLength(2);
+        expect(body.result_info).toBeDefined();
+        expect(body.result_info.count).toBe(2);
+        expect(body.result_info.page).toBe(1);
+        expect(body.result_info.per_page).toBe(2);
+        expect(body.result_info.total_count).toBe(totalToolsCount);
+      });
+
+      it("should support pagination with page offset", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?page=2&per_page=2`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result).toBeInstanceOf(Array);
+        expect(body.result).toHaveLength(2);
+        expect(body.result_info).toBeDefined();
+        expect(body.result_info.count).toBe(2);
+        expect(body.result_info.page).toBe(2);
+        expect(body.result_info.per_page).toBe(2);
+        expect(body.result_info.total_count).toBe(totalToolsCount);
+      });
+
+      it("should return correct pagination metadata", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?page=1&per_page=3`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result_info).toBeDefined();
+        expect(body.result_info.count).toBe(3);
+        expect(body.result_info.page).toBe(1);
+        expect(body.result_info.per_page).toBe(3);
+        expect(body.result_info.total_count).toBe(totalToolsCount);
+      });
+
+      it("should handle page greater than total pages", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?page=100&per_page=10`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result).toBeInstanceOf(Array);
+        expect(body.result).toHaveLength(0);
+        expect(body.result_info.count).toBe(0);
+        expect(body.result_info.page).toBe(100);
+        expect(body.result_info.per_page).toBe(10);
+        expect(body.result_info.total_count).toBe(totalToolsCount);
+      });
+
+      it("should combine pagination with search", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?search=code&page=1&per_page=2`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result).toBeInstanceOf(Array);
+        expect(body.result.length).toBeLessThanOrEqual(2);
+        expect(body.result_info.total_count).toBeGreaterThanOrEqual(0);
+      });
+
+      it("should combine pagination with filtering", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?provider=Local&page=1&per_page=2`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result).toBeInstanceOf(Array);
+        expect(body.result.length).toBeLessThanOrEqual(2);
+        body.result.forEach((tool: any) => {
+          expect(tool.provider).toBe("Local");
+        });
+      });
+
+      it("should combine pagination with ordering", async () => {
+        const response = await SELF.fetch(`http://local.test/api/v1/tools?orderBy=name&page=1&per_page=3`, {
+          headers: {
+            Authorization: "Bearer test-api-key",
+          },
+        });
+        const body = await response.json<{ success: boolean; result: any[]; result_info?: any }>();
+
+        expect(response.status).toBe(200);
+        expect(body.success).toBe(true);
+        expect(body.result).toBeInstanceOf(Array);
+        expect(body.result.length).toBeLessThanOrEqual(3);
+
+        // Check if results are ordered by name
+        const names = body.result.map((tool: any) => tool.name);
+        const sortedNames = [...names].sort();
+        expect(names).toEqual(sortedNames);
+      });
     });
   });
 
@@ -483,12 +639,9 @@ describe("Tool API Integration Tests", () => {
       expect(statuses[1]).toBeGreaterThanOrEqual(400); // Second should fail
 
       // Verify only one tool was actually created
-      const listResponse = await SELF.fetch(
-        "http://local.test/api/v1/tools?name=Concurrent Test Tool",
-        {
-          headers: { Authorization: "Bearer test-api-key" },
-        }
-      );
+      const listResponse = await SELF.fetch("http://local.test/api/v1/tools?name=Concurrent Test Tool", {
+        headers: { Authorization: "Bearer test-api-key" },
+      });
       const body = await listResponse.json<{ result: any[] }>();
       expect(body.result).toHaveLength(1);
     });
@@ -522,7 +675,7 @@ describe("Tool API Integration Tests", () => {
       });
 
       expect(response.status).toBeGreaterThanOrEqual(400);
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
       expect(body.success).toBe(false);
     });
 
@@ -547,7 +700,7 @@ describe("Tool API Integration Tests", () => {
       expect(response.status).toBeLessThan(500);
 
       if (response.status >= 400) {
-        const body = await response.json() as { success: boolean };
+        const body = (await response.json()) as { success: boolean };
         expect(body.success).toBe(false);
       }
     });
@@ -612,7 +765,7 @@ describe("Tool API Integration Tests", () => {
       ]);
 
       // All should fail gracefully, not crash
-      responses.forEach(response => {
+      responses.forEach((response) => {
         expect(response.status).toBeGreaterThanOrEqual(400);
         expect(response.status).toBeLessThan(500);
       });

@@ -10,7 +10,7 @@ export class ToolService {
       toolIds.map(async (toolId) => {
         const [provider, slug, version] = toolId.split('/');
         if (!provider || !slug || !version) return false;
-        
+
         const result = await this.db
           .prepare("SELECT 1 FROM tools WHERE provider = ? AND slug = ? AND version = ? LIMIT 1")
           .bind(provider, slug, version)

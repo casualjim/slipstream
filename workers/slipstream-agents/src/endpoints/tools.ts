@@ -154,5 +154,11 @@ export class ListTools extends D1ListEndpoint<HandleArgs> {
     model: toolMeta.model,
   };
 
+  // @ts-ignore - chanfana has poor type definitions
   filterFields = ["name", "version", "provider", "slug"];
+  // @ts-ignore - chanfana has poor type definitions
+  searchFields = ["name", "description"];
+  // @ts-ignore - chanfana has poor type definitions
+  orderByFields = ["name", "createdAt", "updatedAt"];
+  defaultOrderBy = "name";
 }

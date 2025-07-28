@@ -175,6 +175,10 @@ export class ListProjects extends D1ListEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = {
     ...projectMeta,
-    filterFields: ["name", "slug", "organization"],
   };
+  filterFields = ["name", "slug", "organization"];
+  searchFields = ["name", "description"];
+  // @ts-ignore - chanfana has poor type definitions
+  orderByFields = ["name", "createdAt", "updatedAt"];
+  defaultOrderBy = "name";
 }
