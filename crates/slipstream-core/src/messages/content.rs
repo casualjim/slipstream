@@ -1,10 +1,3 @@
-//! Rust port of the Go `messages` package.
-//!
-//!  • `ContentOrParts`   – `"text"` string OR `[parts]` array OR `null`
-//!  • `Assistant…`       – same, but allows a plain refusal string
-//!  • Tagged `ContentPart` / `AssistantContentPart` enums
-//!  • Audio / video data base-64 encoded exactly like the Go version
-
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser::SerializeStruct as _};
 use serde_json::Value;
 

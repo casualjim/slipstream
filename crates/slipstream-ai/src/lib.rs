@@ -1,6 +1,7 @@
 mod agent;
 mod completer;
 mod embedder;
+mod engine;
 mod error;
 mod events;
 mod executor;
@@ -17,7 +18,10 @@ use slipstream_core::messages::{self, Aggregator};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-use crate::agent::Agent;
+pub use agent::{Agent, DefaultAgent};
+pub use completer::OpenAILikeCompleter;
+pub use events::*;
+pub use executor::{AgentRequest, Executor, Local};
 
 pub type DefaultStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 

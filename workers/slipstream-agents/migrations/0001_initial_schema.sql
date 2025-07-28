@@ -58,7 +58,7 @@ CREATE TABLE tools (
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (slug, version, provider),
-  UNIQUE (name, version)
+  UNIQUE (name, version, provider)
 );
 
 -- Create agents table with composite primary key (slug, version)
@@ -82,7 +82,7 @@ CREATE TABLE agents (
   FOREIGN KEY (createdBy) REFERENCES users (id) ON DELETE CASCADE,
   FOREIGN KEY (updatedBy) REFERENCES users (id) ON DELETE CASCADE,
   FOREIGN KEY (model) REFERENCES model_providers (id),
-  UNIQUE (slug, version, organization, project)
+  UNIQUE (slug, organization, project)
 );
 
 -- Create indexes for better performance
@@ -96,6 +96,12 @@ CREATE INDEX idx_agents_createdBy ON agents (createdBy);
 
 CREATE INDEX idx_agents_slug_version ON agents (slug, version);
 
+CREATE INDEX idx_agents_model ON agents (model);
+
 CREATE INDEX idx_tools_slug_version_provider ON tools (slug, version, provider);
+
+CREATE INDEX idx_tools_provider ON tools (provider);
+
+CREATE INDEX idx_tools_name ON tools (name);
 
 CREATE INDEX idx_users_email ON users (email);

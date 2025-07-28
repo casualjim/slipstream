@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
 use crate::{CompletionParams, ResultStream, events::StreamEvent};
+pub use openailike::OpenAILikeCompleter;
 
 #[derive(Debug, Clone, TypedBuilder, Default, Serialize, Deserialize)]
 pub struct StructuredOutput {

@@ -586,4 +586,234 @@ describe("Agent API Integration Tests", () => {
       expect(body.errors[0].message).toBe("Not Found");
     });
   });
+
+  // Business logic and edge case tests
+  describe("Business logic violations and edge cases", () => {
+    it("should handle concurrent agent creation with same slug", async () => {
+      const agentData = {
+        name: "Concurrent Agent",
+        slug: "concurrent-agent",
+        version: "1.0.0",
+        model: "openai/gpt-4.1",
+        instructions: "Test agent",
+        organization: "wagyu",
+        project: "wagyu-project",
+      };
+
+      const [response1, response2] = await Promise.all([
+        SELF.fetch("http://local.test/api/v1/agents", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(agentData),
+        }),
+        SELF.fetch("http://local.test/api/v1/agents", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(agentData),
+        }),
+      ]);
+
+      const statuses = [response1.status, response2.status].sort();
+      expect(statuses[0]).toBeLessThan(300); // One succeeds
+      expect(statuses[1]).toBeGreaterThanOrEqual(400); // One fails
+    });
+
+    it("should fail gracefully when creating agent with non-existent model", async () => {
+      const agentData = {
+        name: "Bad Model Agent",
+        slug: "bad-model-agent",
+        version: "1.0.0",
+        model: "non-existent-model-id",
+        instructions: "This should fail",
+        organization: "wagyu",
+        project: "wagyu-project",
+      };
+
+      const response = await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(agentData),
+      });
+
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      const body = await response.json() as { success: boolean };
+      expect(body.success).toBe(false);
+
+      // Should not have created a partial record
+      const listResponse = await SELF.fetch(
+        "http://local.test/api/v1/agents",
+        {
+          headers: { Authorization: "Bearer test-api-key" },
+        }
+      );
+      const listBody = await listResponse.json<{ result: any[] }>();
+      const badAgents = listBody.result.filter(a => a.slug === "bad-model-agent");
+      expect(badAgents).toHaveLength(0);
+    });
+
+    it("should fail gracefully when creating agent with non-existent organization", async () => {
+      const agentData = {
+        name: "Bad Org Agent",
+        slug: "bad-org-agent",
+        version: "1.0.0",
+        model: "openai/gpt-4.1",
+        instructions: "This should fail",
+        organization: "non-existent-org",
+        project: "wagyu-project",
+      };
+
+      const response = await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(agentData),
+      });
+
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      const body = await response.json() as { success: boolean };
+      expect(body.success).toBe(false);
+    });
+
+    it("should handle invalid availableTools references", async () => {
+      const agentData = {
+        name: "Invalid Tools Agent",
+        slug: "invalid-tools-agent",
+        version: "1.0.0",
+        model: "openai/gpt-4.1",
+        instructions: "Agent with invalid tool references",
+        organization: "wagyu",
+        project: "wagyu-project",
+        availableTools: [
+          { slug: "non-existent-tool", version: "1.0.0", provider: "Local" },
+        ],
+      };
+
+      const response = await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(agentData),
+      });
+
+      // Should not crash the system
+      expect(response.status).toBeLessThan(500);
+    });
+
+    it("should handle malformed JSON in availableTools", async () => {
+      const agentData = {
+        name: "Malformed JSON Agent",
+        slug: "malformed-json-agent",
+        version: "1.0.0",
+        model: "openai/gpt-4.1",
+        instructions: "Agent with malformed JSON",
+        organization: "wagyu",
+        project: "wagyu-project",
+        availableTools: "invalid-json-string",
+      };
+
+      const response = await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(agentData),
+      });
+
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      const body = await response.json() as { success: boolean };
+      expect(body.success).toBe(false);
+    });
+
+    it("should handle version conflicts in updates", async () => {
+      // Create an agent
+      const agentData = {
+        name: "Version Conflict Agent",
+        slug: "version-conflict-agent",
+        version: "1.0.0",
+        model: "openai/gpt-4.1",
+        instructions: "Original version",
+        organization: "wagyu",
+        project: "wagyu-project",
+      };
+
+      await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(agentData),
+      });
+
+      // Try to create another version with same slug but different version
+      const newVersionData = {
+        ...agentData,
+        version: "2.0.0",
+        instructions: "New version",
+      };
+
+      const response = await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newVersionData),
+      });
+
+      expect(response.status).toBeLessThan(500);
+
+      if (response.status < 300) {
+        // If versioning is allowed, verify both versions exist
+        const listResponse = await SELF.fetch(
+          "http://local.test/api/v1/agents",
+          {
+            headers: { Authorization: "Bearer test-api-key" },
+          }
+        );
+        const body = await listResponse.json<{ result: any[] }>();
+        const agents = body.result.filter(a => a.slug === "version-conflict-agent");
+        expect(agents.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should handle extremely long instructions gracefully", async () => {
+      const longInstructions = "This is a very long instruction. ".repeat(1000); // ~34KB
+      const agentData = {
+        name: "Long Instructions Agent",
+        slug: "long-instructions-agent",
+        version: "1.0.0",
+        model: "openai/gpt-4.1",
+        instructions: longInstructions,
+        organization: "wagyu",
+        project: "wagyu-project",
+      };
+
+      const response = await SELF.fetch("http://local.test/api/v1/agents", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-api-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(agentData),
+      });
+
+      // Should either accept it or reject with proper error, but not crash
+      expect(response.status).toBeLessThan(500);
+    });
+  });
 });

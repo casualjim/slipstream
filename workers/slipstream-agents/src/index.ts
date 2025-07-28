@@ -4,8 +4,8 @@ import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { CreateAgent, DeleteAgent, GetAgent, ListAgents, UpdateAgent } from "./endpoints/agents";
 import { GetModel, ListModels } from "./endpoints/models";
-import { GetOrganization, ListOrganizations } from "./endpoints/organizations";
-import { GetProject, ListProjects } from "./endpoints/projects";
+import { CreateOrganization, DeleteOrganization, GetOrganization, ListOrganizations, UpdateOrganization } from "./endpoints/organizations";
+import { CreateProject, DeleteProject, GetProject, ListProjects, UpdateProject } from "./endpoints/projects";
 import { CreateTool, DeleteTool, GetTool, ListTools, UpdateTool } from "./endpoints/tools";
 // Import endpoints
 import { bearerAuth } from "./middleware/auth";
@@ -23,7 +23,6 @@ app.onError((err, c) => {
     // If it's an HTTPException, return it directly
     return c.json({ success: false, errors: [{ code: err.status, message: err.message }] }, err.status);
   }
-  console.error("Global error handler caught:", err); // Log the error if it's not known
 
   // For other errors, return a generic 500 response
   return c.json(
@@ -53,18 +52,18 @@ const openapi = fromHono(app, {
 
 // Register endpoints
 // Organizations
-// openapi.post("/organizations", CreateOrganization);
+openapi.post("/organizations", CreateOrganization);
 openapi.get("/organizations", ListOrganizations);
 openapi.get("/organizations/:slug", GetOrganization);
-// openapi.put("/organizations/:slug", UpdateOrganization);
-// openapi.delete("/organizations/:slug", DeleteOrganization);
+openapi.put("/organizations/:slug", UpdateOrganization);
+openapi.delete("/organizations/:slug", DeleteOrganization);
 
 // Projects
-// openapi.post("/projects", CreateProject);
+openapi.post("/projects", CreateProject);
 openapi.get("/projects", ListProjects);
 openapi.get("/projects/:slug", GetProject);
-// openapi.put("/projects/:slug", UpdateProject);
-// openapi.delete("/projects/:slug", DeleteProject);
+openapi.put("/projects/:slug", UpdateProject);
+openapi.delete("/projects/:slug", DeleteProject);
 
 // // Tools
 openapi.post("/tools", CreateTool);

@@ -1,6 +1,7 @@
 mod memory_agent;
 mod memory_model;
 mod memory_tool;
+mod http_model;
 
 use crate::Result;
 use async_trait::async_trait;
@@ -10,6 +11,7 @@ use std::fmt::Debug;
 pub use memory_agent::MemoryAgentRegistry;
 pub use memory_model::MemoryModelRegistry;
 pub use memory_tool::MemoryToolRegistry;
+pub use http_model::HttpModelRegistry;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pagination {

@@ -1,6 +1,21 @@
 import { D1CreateEndpoint, D1DeleteEndpoint, D1ListEndpoint, D1ReadEndpoint, D1UpdateEndpoint } from "chanfana";
+import { generateSlug } from "../lib/utils";
 import type { HandleArgs, Tool } from "../types";
 import { ToolSchema } from "../types";
+
+// Schema for creating tools - slug is optional since it can be auto-generated
+const CreateToolSchema = ToolSchema.omit({ createdAt: true, updatedAt: true }).extend({
+  slug: ToolSchema.shape.slug.optional(),
+});
+
+// Schema for updating tools - excludes primary keys and makes other fields optional
+const UpdateToolSchema = ToolSchema.omit({
+  slug: true,
+  version: true,
+  provider: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
 
 const toolMeta = {
   fields: ToolSchema.pick({
@@ -41,11 +56,19 @@ const toolMeta = {
 };
 export class CreateTool extends D1CreateEndpoint<HandleArgs> {
   //@ts-expect-error
-  _meta = toolMeta;
+  _meta = {
+    ...toolMeta,
+    fields: CreateToolSchema,
+  };
 
   async before(data: Tool): Promise<Tool> {
     data.createdAt = new Date().toISOString();
     data.updatedAt = new Date().toISOString();
+
+    // Auto-generate slug from name if not provided
+    if (!data.slug || data.slug.trim().length === 0) {
+      data.slug = generateSlug(data.name);
+    }
 
     // Convert arguments object to JSON string for storage
     if (data.arguments && typeof data.arguments === "object") {
@@ -93,18 +116,7 @@ export class UpdateTool extends D1UpdateEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = {
     ...toolMeta,
-    fields: ToolSchema.pick({
-      slug: true,
-      version: true,
-      provider: true,
-      name: true,
-      description: true,
-      arguments: true,
-    }).partial().omit({
-      slug: true,
-      version: true,
-      provider: true,
-    }), // Allow partial updates but exclude primary key fields
+    fields: UpdateToolSchema,
   };
 
   async before(oldObj: Record<string, any>, filters: any): Promise<any> {
@@ -139,7 +151,8 @@ export class DeleteTool extends D1DeleteEndpoint<HandleArgs> {
 export class ListTools extends D1ListEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = {
-    ...toolMeta,
-    filterFields: ["name"],
+    model: toolMeta.model,
   };
+
+  filterFields = ["name", "version", "provider", "slug"];
 }

@@ -7,7 +7,7 @@ export class OrganizationService {
   }
 
   async hasProjects(orgId: string): Promise<boolean> {
-    const result = await this.db.prepare("SELECT 1 FROM projects WHERE organizationId = ? LIMIT 1").bind(orgId).first();
+    const result = await this.db.prepare("SELECT 1 FROM projects WHERE organization = ? LIMIT 1").bind(orgId).first();
     return !!result;
   }
 

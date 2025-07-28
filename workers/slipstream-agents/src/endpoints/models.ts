@@ -1,11 +1,36 @@
 import { D1ListEndpoint, D1ReadEndpoint } from "chanfana";
+import { z } from "zod";
 import type { HandleArgs } from "../types";
-import { ModelProviderSchema } from "../types";
+import { APIDialect, Modalities, ModelCapabilities, ModelProviderSchema, Provider } from "../types";
+
+const jsonArray = z.string().transform((val) => {
+  try {
+    return JSON.parse(val);
+  } catch {
+    return [];
+  }
+});
 
 const modelMeta = {
+  fields: z.object({
+    id: z.string(),
+    name: z.string(),
+    provider: z.nativeEnum(Provider),
+    description: z.string().nullish(),
+    contextSize: z.number(),
+    maxTokens: z.number().nullish(),
+    temperature: z.number().nullish(),
+    topP: z.number().nullish(),
+    frequencyPenalty: z.number().nullish(),
+    presencePenalty: z.number().nullish(),
+    capabilities: z.array(z.nativeEnum(ModelCapabilities)),
+    inputModalities: z.array(z.nativeEnum(Modalities)),
+    outputModalities: z.array(z.nativeEnum(Modalities)),
+    dialect: z.nativeEnum(APIDialect).nullish(),
+  }),
   model: {
     schema: ModelProviderSchema,
-    primaryKeys: ["id"], // The primary key is 'id'
+    primaryKeys: ["id"],
     tableName: "model_providers",
     serializer: (obj: Record<string, unknown>) => {
       // Parse JSON fields
@@ -22,7 +47,6 @@ const modelMeta = {
     },
     serializerObject: ModelProviderSchema,
   },
-  // Path parameter for ID that can contain slashes
   pathParameters: ["id"],
 };
 

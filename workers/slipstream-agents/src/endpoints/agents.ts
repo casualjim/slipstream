@@ -90,6 +90,24 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
 
     return data;
   }
+
+  // Override handle to catch constraint violations at a higher level
+  async handle(c: any) {
+    try {
+      return await super.handle(c);
+    } catch (error: any) {
+      // Check if it's a unique constraint violation
+      if (error?.message?.includes("UNIQUE constraint failed") ||
+          error?.message?.includes("SQLITE_CONSTRAINT") ||
+          error?.message?.includes("constraint")) {
+        throw new HTTPException(409, {
+          message: "An agent with this name already exists in this organization and project"
+        });
+      }
+      // Re-throw other errors
+      throw error;
+    }
+  }
 }
 
 export class GetAgent extends D1ReadEndpoint<HandleArgs> {

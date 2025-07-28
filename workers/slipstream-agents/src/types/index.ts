@@ -63,16 +63,16 @@ const jsonArray = z.string().transform((val) => {
 
 // Keep schemas minimal - let D1AutoEndpoint handle most validation
 export const OrganizationSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/),
-  name: z.string(),
+  slug: z.string().regex(/^[A-Za-z0-9-]{3,}$/),
+  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
   description: z.string().nullish(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 
 export const ProjectSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/),
-  name: z.string(),
+  slug: z.string().regex(/^[A-Za-z0-9-]{3,}$/),
+  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
   description: z.string().nullish(),
   organization: z.string(),
   createdAt: z.string(),
@@ -92,11 +92,28 @@ export const ToolSchema = z.object({
   slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/),
   version: z.string(),
   provider: z.nativeEnum(ToolProvider),
-  name: z.string(),
+  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
   description: z.string().nullish(),
   arguments: z.record(z.any()).nullish(), // JSON Schema object
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+// Schema for creating tools - slug is optional and will be auto-generated
+export const CreateToolSchema = z.object({
+  slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/).optional(),
+  version: z.string(),
+  provider: z.nativeEnum(ToolProvider),
+  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
+  description: z.string().optional(),
+  arguments: z.record(z.any()).optional(), // JSON Schema object
+});
+
+// Schema for updating tools - excludes primary keys
+export const UpdateToolSchema = z.object({
+  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters").optional(),
+  description: z.string().optional(),
+  arguments: z.record(z.any()).optional(), // JSON Schema object
 });
 
 export const ModelProviderSchema = z.object({
@@ -119,7 +136,7 @@ export const ModelProviderSchema = z.object({
 export const AgentSchema = z.object({
   slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/),
   version: z.string(),
-  name: z.string(),
+  name: z.string().regex(/^[A-Za-z0-9]{3,}/, "Name must contain at least 3 alphanumeric characters"),
   description: z.string().nullish(),
   model: z.string(),
   instructions: z.string(),

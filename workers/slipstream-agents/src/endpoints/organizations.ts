@@ -113,8 +113,8 @@ export class ListOrganizations extends D1ListEndpoint<HandleArgs> {
   //@ts-expect-error
   _meta = {
     ...readOnlyMeta,
-    filterFields: ["name", "slug"],
   };
+  filterFields = ["name", "slug"];
+
   // For now, use default list behavior
-  // TODO: Add filtering by user's organizations
 }

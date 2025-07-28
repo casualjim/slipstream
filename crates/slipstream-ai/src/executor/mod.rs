@@ -7,6 +7,8 @@ use typed_builder::TypedBuilder;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
+pub use local::Local;
+
 use crate::{Result, agent::Agent, completer::StructuredOutput, events::StreamEvent};
 
 fn validate_uuid_not_nil(uuid: &Uuid) -> Result<(), ValidationError> {
