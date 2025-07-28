@@ -1,4 +1,3 @@
-mod accumulator;
 mod agent;
 mod completer;
 mod embedder;
@@ -9,7 +8,6 @@ mod reranker;
 
 use std::{pin::Pin, sync::Arc};
 
-pub use accumulator::{FinishedToolCall, JustFinished, StreamAccumulator};
 use async_trait::async_trait;
 pub use error::{Error, Result};
 use futures::Stream;

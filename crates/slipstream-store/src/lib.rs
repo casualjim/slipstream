@@ -1013,10 +1013,6 @@ mod tests {
       }
     };
 
-    println!(
-      "Successfully completed {} 2PC operations out of 20",
-      graph_count
-    );
     assert!(
       graph_count > 0,
       "Should have at least some successful 2PC operations"
@@ -1148,8 +1144,6 @@ mod tests {
         *success_counts.entry(op_type).or_insert(0) += 1;
       }
     }
-
-    println!("High load test results: {:?}", success_counts);
 
     // All operations should succeed
     let total_success: usize = success_counts.values().sum();
@@ -1311,7 +1305,6 @@ mod tests {
       match result {
         Ok((i, _, Ok(_))) => {
           successful += 1;
-          println!("Operation {} (group {}) succeeded", i, i / 10);
         }
         Ok((i, _, Err(e))) => {
           failed += 1;
@@ -1319,22 +1312,11 @@ mod tests {
         }
         Err(e) => {
           panic_count += 1;
-          println!("Task panicked: {:?}", e);
         }
       }
     }
 
-    println!("\n2PC Failure Analysis:");
-    println!("Total operations: 50");
-    println!("Successful 2PC: {}", successful);
-    println!("Failed 2PC: {}", failed);
-    println!("Panicked tasks: {}", panic_count);
-
     // Print first few errors to understand the pattern
-    println!("\nFirst 10 GraphDb errors:");
-    for (i, err) in graph_errors.iter().take(10) {
-      println!("  Operation {} (group {}): {}", i, *i / 10, err);
-    }
 
     // We expect exactly 5 successes (first in each conflict group)
     // The exact winners depend on execution order, but there should be one per group
@@ -1402,17 +1384,6 @@ mod tests {
       }
     };
 
-    println!("\nData Consistency Check:");
-    println!("MetaDb records: {} (with proper 2PC rollback)", meta_count);
-    println!(
-      "GraphDb Entity2PCFailure records: {} (all entity nodes created)",
-      graph_count
-    );
-    println!(
-      "GraphDb UniqueConstraint records: {} (only non-conflicting operations)",
-      unique_count
-    );
-
     // WITH PROPER 2PC: We expect consistency between databases
     // Only successful transactions should have data in both databases
     // The exact count depends on execution order and rollback cascades
@@ -1445,12 +1416,6 @@ mod tests {
       .filter(|(_, _, status)| *status == "meta_success")
       .map(|(i, version, _)| (*i, *version))
       .collect();
-
-    println!("\nVersion Analysis:");
-    println!(
-      "Successful MetaDb operations: {}",
-      successful_meta_versions.len()
-    );
 
     // Due to concurrent rollbacks, we may not get all 50 versions
     // Some operations may fail during the MetaDb phase due to conflicts
@@ -1520,9 +1485,6 @@ mod tests {
       .await
       .expect("Failed to insert initial data");
 
-    println!("Initial state:");
-    println!("- MetaDb version: {}", initial_version);
-
     // Test 1: Successful 2PC operation
     let success_id = uuid::Uuid::now_v7();
     let schema_clone = schema.clone();
@@ -1542,7 +1504,7 @@ mod tests {
             let (rollback_version, version) = meta
               .save_to_table("deterministic_test", batch, &["id"])
               .await?;
-            println!("Test 1 - MetaDb write succeeded, version: {}", version);
+
             Ok((success_id, Some(("deterministic_test", rollback_version))))
           })
         },
@@ -1579,7 +1541,7 @@ mod tests {
             let (rollback_version, version) = meta
               .save_to_table("deterministic_test", batch, &["id"])
               .await?;
-            println!("Test 2 - MetaDb write succeeded, version: {}", version);
+
             Ok((failed_id, Some(("deterministic_test", rollback_version))))
           })
         },
@@ -1608,30 +1570,6 @@ mod tests {
       let batches: Vec<_> = stream.try_collect().await.expect("Failed to collect");
 
       // Debug: print what's actually in the table
-      println!("\nMetaDb contents after rollback:");
-      for (i, batch) in batches.iter().enumerate() {
-        println!("  Batch {}: {} rows", i, batch.num_rows());
-        if batch.num_rows() > 0 {
-          let id_col = batch
-            .column(0)
-            .as_any()
-            .downcast_ref::<StringArray>()
-            .unwrap();
-          let value_col = batch
-            .column(1)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-          for row in 0..batch.num_rows() {
-            println!(
-              "    Row {}: id={}, value={}",
-              row,
-              id_col.value(row),
-              value_col.value(row)
-            );
-          }
-        }
-      }
 
       batches.iter().map(|b| b.num_rows()).sum::<usize>()
     };
@@ -1660,20 +1598,6 @@ mod tests {
       .get_table_version("deterministic_test")
       .await
       .expect("Failed to get version");
-
-    println!("\nFinal state:");
-    println!(
-      "- MetaDb records: {} (after rollback, same as checkpoint)",
-      meta_count
-    );
-    println!(
-      "- GraphDb records: {} (should be 1: only successful operation)",
-      graph_count
-    );
-    println!(
-      "- Final MetaDb version: {} (includes rollback version)",
-      final_version
-    );
 
     // Based on our reference test, LanceDB rollback restores data to checkpoint state
     assert_eq!(
@@ -1815,7 +1739,7 @@ mod tests {
               use crate::extract_uuids_to_in_clause;
 
               let (in_clause, uuids) = extract_uuids_to_in_clause(graph_stream).await?;
-              println!("Found {} UUIDs from GraphDB", uuids.len());
+
 
               if uuids.is_empty() {
                 return Ok(PrimaryStoreQuery {
@@ -1866,7 +1790,6 @@ mod tests {
       .await
       .expect("Failed to collect stream");
 
-    println!("Final result: {:?}", result);
     assert_eq!(result.len(), 2, "Should find 2 episodes");
     assert!(
       result
@@ -2184,7 +2107,6 @@ mod tests {
       .get_table_version("test_rollback")
       .await
       .expect("Failed to get version");
-    println!("Initial version: {}", initial_version);
 
     // Simulate a failed 2PC operation
     let failed_id = uuid::Uuid::now_v7();
@@ -2204,7 +2126,6 @@ mod tests {
 
             let (rollback_version, version) =
               meta.save_to_table("test_rollback", batch, &["id"]).await?;
-            println!("Version after MetaDb write: {}", version);
 
             Ok((failed_id, Some(("test_rollback", rollback_version))))
           })
@@ -2247,17 +2168,6 @@ mod tests {
       .get_table_version("test_rollback")
       .await
       .expect("Failed to get version");
-
-    println!("\nAutomatic rollback demonstration:");
-    println!("Initial version: {}", initial_version);
-    println!(
-      "After failed 2PC with automatic rollback: {}",
-      final_version
-    );
-    println!(
-      "Note: Rollback created NEW version {} with old data",
-      final_version
-    );
 
     // The automatic rollback should have created a new version
     assert!(
@@ -3436,9 +3346,6 @@ mod tests {
       .await
       .expect("Failed to create MetaDb");
 
-    println!("Raw test: GraphDB path = {:?}", graph_db.path);
-    println!("Raw test: MetaDB path = {:?}", meta_db.path);
-
     // Create Episode schema in GraphDB manually
     graph_db
       .execute_write(
@@ -3499,8 +3406,6 @@ mod tests {
     let now_jiff = jiff::Timestamp::now();
     let now_time = time::OffsetDateTime::from_unix_timestamp_nanos(now_jiff.as_nanosecond())
       .expect("Invalid timestamp");
-
-    println!("Raw test: Creating episode with UUID: {}", test_uuid);
 
     // Create episodes table in MetaDB first
     let schema_for_create = episode_schema.clone();
@@ -3565,18 +3470,13 @@ mod tests {
     )
     .expect("Failed to create RecordBatch");
 
-    println!("Raw test: Saving to MetaDB...");
     let (_, meta_version) = meta_db
       .save_to_table("episodes", meta_batch, &["uuid"])
       .await
       .expect("Failed to save to MetaDB");
-    println!(
-      "Raw test: MetaDB save successful, version: {}",
-      meta_version
-    );
 
     // 2. Save to GraphDB manually
-    println!("Raw test: Saving to GraphDB...");
+
     graph_db.execute_write(
       "CREATE (:Episode {uuid: $uuid, group_id: $group_id, source: $source, valid_at: $valid_at, created_at: $created_at, kumos_version: $version})",
       vec![
@@ -3590,10 +3490,9 @@ mod tests {
     )
     .await
     .expect("Failed to save to GraphDB");
-    println!("Raw test: GraphDB save successful");
 
     // 3. Verify MetaDB has the data (direct query)
-    println!("Raw test: Querying MetaDB directly...");
+
     let meta_stream = meta_db
       .query_table(&PrimaryStoreQuery {
         table: "episodes",
@@ -3610,10 +3509,9 @@ mod tests {
       .await
       .expect("Failed to collect MetaDB results");
     let meta_row_count: usize = meta_results.iter().map(|b| b.num_rows()).sum();
-    println!("Raw test: MetaDB has {} episodes", meta_row_count);
 
     // 4. Verify GraphDB has the data (direct query)
-    println!("Raw test: Querying GraphDB directly...");
+
     let graph_receiver = graph_db
       .execute_query("MATCH (n:Episode) RETURN count(n)", vec![])
       .await
@@ -3631,10 +3529,9 @@ mod tests {
     } else {
       panic!("Expected Int64 count from GraphDB");
     };
-    println!("Raw test: GraphDB has {} episodes", graph_count);
 
     // 5. Test the specific group query that fails in the real test
-    println!("Raw test: Testing group query on GraphDB...");
+
     let group_receiver = graph_db
       .execute_query(
         "MATCH (n:Episode) WHERE list_contains(['raw-test-group'], n.group_id) RETURN n.uuid",
@@ -3649,17 +3546,11 @@ mod tests {
       let row = result.expect("Row should be Ok");
       if let kuzu::Value::UUID(uuid) = &row[0] {
         found_uuids.push(*uuid);
-        println!("Raw test: Found UUID in GraphDB: {}", uuid);
       }
     }
-    println!(
-      "Raw test: GraphDB group query found {} UUIDs",
-      found_uuids.len()
-    );
 
     // 6. Test the specific UUID filter that fails in LanceDB
     if !found_uuids.is_empty() {
-      println!("Raw test: Testing UUID filter on MetaDB...");
       let uuid_filter = format!("uuid IN ('{}')", found_uuids[0]);
       let uuid_stream = meta_db
         .query_table(&PrimaryStoreQuery {
@@ -3677,28 +3568,15 @@ mod tests {
         .await
         .expect("Failed to collect UUID filter results");
       let uuid_row_count: usize = uuid_results.iter().map(|b| b.num_rows()).sum();
-      println!(
-        "Raw test: MetaDB UUID filter found {} episodes",
-        uuid_row_count
-      );
 
       // This is the key test - do we get results when we use the exact same UUID?
       if uuid_row_count == 0 {
-        println!(
-          "❌ BUG CONFIRMED: GraphDB finds UUID but MetaDB doesn't find it with UUID filter"
-        );
-        println!("   GraphDB found: {}", found_uuids[0]);
-        println!("   MetaDB filter: {}", uuid_filter);
         panic!("Database synchronization issue confirmed!");
       } else {
-        println!("✅ SUCCESS: Both databases have the episode and UUID filter works");
       }
     } else {
-      println!("❌ BUG: GraphDB group query didn't find any UUIDs");
       panic!("GraphDB group query issue confirmed!");
     }
-
-    println!("Raw test: All database operations successful!");
   }
 
   #[tokio::test]
@@ -3719,7 +3597,6 @@ mod tests {
       .expect("Failed to create Database");
 
     // Create Episode schemas manually (like migrations would do)
-    println!("2PC Episode pattern: Creating schemas...");
 
     // GraphDB Episode schema
     db.graph
@@ -3744,8 +3621,6 @@ mod tests {
     let now_jiff = jiff::Timestamp::now();
     let now_time = time::OffsetDateTime::from_unix_timestamp_nanos(now_jiff.as_nanosecond())
       .expect("Invalid timestamp");
-
-    println!("2PC Episode pattern: Testing with UUID: {}", test_uuid);
 
     // Create episode table in MetaDB first (like migrations do)
     let episode_schema = Arc::new(ArrowSchema::new(vec![
@@ -3791,7 +3666,6 @@ mod tests {
       }))
       .await
       .expect("Failed to create episodes table");
-    println!("2PC Episode pattern: Created empty episodes table");
 
     // Use the 2PC mechanism directly like SaveEpisode does
     let episode_schema_clone = episode_schema.clone();
@@ -3848,7 +3722,7 @@ mod tests {
           // Save to MetaDB with MergeInsert (like SaveEpisode)
           let (_, version) = meta.save_to_table("episodes", batch, &["uuid"]).await?;
 
-          println!("2PC Episode pattern: MetaDB save successful, version: {}", version);
+
           Ok((test_uuid, Some(("episodes", version - 1)))) // Return table name and previous version for rollback
         })
       },
@@ -3868,10 +3742,8 @@ mod tests {
       ],
     ).await.expect("2PC operation should succeed");
 
-    println!("2PC Episode pattern: 2PC operation completed successfully");
-
     // Verify both databases have the data
-    println!("2PC Episode pattern: Verifying MetaDB state...");
+
     let meta_filter = format!("uuid = '{}'", test_uuid);
     let meta_stream = db
       .meta
@@ -3889,9 +3761,7 @@ mod tests {
       .await
       .expect("Failed to collect MetaDB results");
     let meta_count: usize = meta_batches.iter().map(|b| b.num_rows()).sum();
-    println!("2PC Episode pattern: MetaDB has {} episodes", meta_count);
 
-    println!("2PC Episode pattern: Verifying GraphDB state...");
     let graph_receiver = db
       .graph
       .execute_query(
@@ -3909,7 +3779,6 @@ mod tests {
         graph_count += 1;
       }
     }
-    println!("2PC Episode pattern: GraphDB has {} episodes", graph_count);
 
     // Both should have exactly 1 episode
     assert_eq!(
@@ -3922,7 +3791,7 @@ mod tests {
     );
 
     // Test the problematic query pattern from GetEpisodesByGroupIds
-    println!("2PC Episode pattern: Testing group query pattern...");
+
     let group_receiver = db
       .graph
       .execute_query(
@@ -3938,14 +3807,9 @@ mod tests {
       let row = result.expect("Row should be Ok");
       if let kuzu::Value::UUID(uuid) = &row[0] {
         group_found_uuids.push(*uuid);
-        println!("2PC Episode pattern: Group query found UUID: {}", uuid);
       }
     }
 
-    println!(
-      "2PC Episode pattern: Group query found {} UUIDs",
-      group_found_uuids.len()
-    );
     assert_eq!(
       group_found_uuids.len(),
       1,
@@ -3957,7 +3821,7 @@ mod tests {
     );
 
     // Test the UUID IN filter on MetaDB (the problematic part)
-    println!("2PC Episode pattern: Testing UUID IN filter on MetaDB...");
+
     let uuid_filter = format!("uuid IN ('{}')", group_found_uuids[0]);
     let uuid_stream = db
       .meta
@@ -3976,19 +3840,7 @@ mod tests {
       .expect("Failed to collect UUID filter results");
     let uuid_count: usize = uuid_batches.iter().map(|b| b.num_rows()).sum();
 
-    println!(
-      "2PC Episode pattern: MetaDB UUID IN filter found {} episodes",
-      uuid_count
-    );
-
     if uuid_count == 0 {
-      println!("❌ 2PC EPISODE BUG CONFIRMED:");
-      println!("   - 2PC operation succeeded");
-      println!("   - GraphDB has episode with UUID: {}", test_uuid);
-      println!("   - MetaDB has episode: {} (by direct filter)", meta_count);
-      println!("   - Group query finds UUID: {}", group_found_uuids[0]);
-      println!("   - But UUID IN filter finds: {} episodes", uuid_count);
-
       // Debug the actual UUID values
       let meta_all_stream = db
         .meta
@@ -4015,20 +3867,6 @@ mod tests {
             .downcast_ref::<arrow_array::StringArray>()
             .expect("UUID should be string array");
           let stored_uuid = uuid_array.value(0);
-          println!(
-            "   MetaDB UUID: '{}' (len: {})",
-            stored_uuid,
-            stored_uuid.len()
-          );
-          println!(
-            "   GraphDB UUID: '{}' (len: {})",
-            group_found_uuids[0],
-            group_found_uuids[0].to_string().len()
-          );
-          println!(
-            "   String equality: {}",
-            stored_uuid == group_found_uuids[0].to_string()
-          );
         }
       }
 
@@ -4039,7 +3877,6 @@ mod tests {
       uuid_count, 1,
       "UUID IN filter should find exactly 1 episode"
     );
-    println!("✅ 2PC Episode pattern: All verifications passed!");
   }
 
   #[tokio::test]
@@ -4262,8 +4099,6 @@ mod tests {
       1,
       "Should find exactly one item3"
     );
-
-    println!("✅ Vector search through Database: All tests passed!");
   }
 
   #[tokio::test]
@@ -4354,9 +4189,7 @@ mod tests {
     if result.is_ok() {
       let stream = result.unwrap();
       let batches: Vec<_> = stream.try_collect().await.expect("Failed to collect");
-      println!("Zero vector search returned {} batches", batches.len());
     } else {
-      println!("Zero vector search failed as expected: {:?}", result.err());
     }
 
     // Test with L2 distance (should handle zero vectors better)
@@ -4384,7 +4217,5 @@ mod tests {
       .expect("Failed to collect L2 results");
 
     assert!(!l2_batches.is_empty(), "L2 search should return results");
-
-    println!("✅ Vector search edge cases: Tests completed!");
   }
 }

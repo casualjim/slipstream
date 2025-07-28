@@ -275,7 +275,7 @@ mod tests {
 
     // Execute the failing command
     let result = db.execute(FailingBulkSave).await;
-    eprintln!("FailingBulkSave result: {:?}", result);
+
     assert!(result.is_err(), "Command should have failed");
 
     // Verify that data was rolled back correctly
@@ -288,13 +288,6 @@ mod tests {
       .expect("Failed to collect after rollback");
 
     // Debug: print what we found
-    eprintln!("After rollback, found {} items:", after_rollback.len());
-    for (i, item) in after_rollback.iter().enumerate() {
-      eprintln!(
-        "  Item {}: id={}, name='{}', value={}",
-        i, item.id, item.name, item.value
-      );
-    }
 
     // Should still have only the initial item
     assert_eq!(after_rollback.len(), 1);

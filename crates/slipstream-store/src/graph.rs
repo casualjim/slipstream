@@ -555,7 +555,7 @@ mod tests {
     .expect("Failed to insert test data");
 
     // Test simple IN clause (this should work)
-    println!("Testing IN clause...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:GroupTestNode) WHERE n.group_id IN ['group-a'] RETURN n.id",
@@ -570,11 +570,11 @@ mod tests {
       row_result.expect("Row should be Ok");
       count += 1;
     }
-    println!("IN clause found {} results", count);
+
     assert_eq!(count, 2, "Should find 2 episodes with group-a");
 
     // Test list_contains function (this might fail)
-    println!("Testing list_contains function...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:GroupTestNode) WHERE list_contains(['group-a'], n.group_id) RETURN n.id",
@@ -590,12 +590,11 @@ mod tests {
           match row_result {
             Ok(_row) => count += 1,
             Err(e) => {
-              println!("list_contains query execution failed: {}", e);
               break;
             }
           }
         }
-        println!("list_contains returned {} results", count);
+
         if count > 0 {
           assert_eq!(
             count, 2,
@@ -604,7 +603,7 @@ mod tests {
         }
       }
       Err(e) => {
-        println!("list_contains function not supported: {}", e);
+
         // This is fine - it means Kuzu doesn't support list_contains
         // We need to use IN clause instead
       }
@@ -717,7 +716,7 @@ mod tests {
     }
 
     // Test 1: Simple equality filter
-    println!("Testing simple equality filter...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:Episode) WHERE n.group_id = 'group-a' RETURN n.uuid",
@@ -735,7 +734,7 @@ mod tests {
     assert_eq!(count, 2, "Should find 2 episodes with group-a");
 
     // Test 2: IN clause syntax
-    println!("Testing IN clause syntax...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:Episode) WHERE n.group_id IN ['group-a', 'group-b'] RETURN n.uuid",
@@ -753,7 +752,7 @@ mod tests {
     assert_eq!(count, 3, "Should find 3 episodes with group-a or group-b");
 
     // Test 3: Try list_contains function (this might be the issue)
-    println!("Testing list_contains function...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:Episode) WHERE list_contains(['group-a', 'group-b'], n.group_id) RETURN n.uuid",
@@ -769,21 +768,19 @@ mod tests {
           match row_result {
             Ok(_row) => count += 1,
             Err(e) => {
-              println!("list_contains query failed: {}", e);
               break;
             }
           }
         }
-        println!("list_contains returned {} results", count);
       }
       Err(e) => {
-        println!("list_contains function failed: {}", e);
+
         // This might be the issue - let's try alternative syntax
       }
     }
 
     // Test 4: Alternative - using ANY or EXISTS
-    println!("Testing alternative syntax with ANY...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:Episode) WHERE n.group_id = ANY(['group-a', 'group-b']) RETURN n.uuid",
@@ -799,16 +796,12 @@ mod tests {
           match row_result {
             Ok(_row) => count += 1,
             Err(e) => {
-              println!("ANY query error: {}", e);
               break;
             }
           }
         }
-        println!("ANY syntax returned {} results", count);
       }
-      Err(e) => {
-        println!("ANY syntax failed: {}", e);
-      }
+      Err(e) => {}
     }
   }
 
@@ -844,7 +837,7 @@ mod tests {
     }
 
     // Test ordering by UUID DESC
-    println!("Testing UUID ordering DESC...");
+
     let receiver = db
       .execute_query(
         "MATCH (n:Episode) RETURN n.uuid, n.name ORDER BY n.uuid DESC",
@@ -859,9 +852,7 @@ mod tests {
       let row = row_result.expect("Row should be Ok");
       if let Value::UUID(uuid) = &row[0] {
         returned_uuids.push(*uuid);
-        if let Value::String(name) = &row[1] {
-          println!("  Found: {} - {}", uuid, name);
-        }
+        if let Value::String(name) = &row[1] {}
       }
     }
 
@@ -933,7 +924,7 @@ mod tests {
     .expect("Failed to insert episode 2");
 
     // Test the exact query used in GetEpisodesByGroupIds
-    println!("Testing exact episode query used in GetEpisodesByGroupIds...");
+
     let group_ids_list = "'group-a'";
     let cypher = format!(
       "MATCH (n:Episode)
@@ -942,7 +933,6 @@ mod tests {
        ORDER BY n.uuid DESC",
       group_ids_list
     );
-    println!("Query: {}", cypher);
 
     let receiver = db
       .execute_query(&cypher, vec![])
@@ -957,17 +947,15 @@ mod tests {
       if let Some(kuzu::Value::UUID(uuid)) = row.first() {
         found_uuids.push(*uuid);
         count += 1;
-        println!("Found UUID: {}", uuid);
       }
     }
 
-    println!("Query returned {} episodes", count);
     assert_eq!(count, 2, "Should find 2 episodes with group-a");
     assert!(found_uuids.contains(&episode1_uuid));
     assert!(found_uuids.contains(&episode2_uuid));
 
     // Also test a basic count query
-    println!("Testing basic count query...");
+
     let receiver = db
       .execute_query("MATCH (n:Episode) RETURN count(n)", vec![])
       .await
@@ -979,7 +967,6 @@ mod tests {
       .expect("Should have count result")
       .expect("Row should be Ok");
     if let kuzu::Value::Int64(total_count) = &row[0] {
-      println!("Total episodes in GraphDB: {}", total_count);
       assert_eq!(*total_count, 2, "Should have 2 total episodes");
     } else {
       panic!("Expected Int64 count");
@@ -1022,7 +1009,7 @@ mod tests {
     }
 
     // Test timestamp filtering (like our retrieve_episodes query)
-    println!("Testing timestamp filtering...");
+
     let reference_time = base_time - time::Duration::minutes(30); // Between hour 0 and 1
 
     let receiver = db
@@ -1038,9 +1025,7 @@ mod tests {
     while let Some(row_result) = result.next().await {
       let row = row_result.expect("Row should be Ok");
       count += 1;
-      if let Value::UUID(uuid) = &row[0] {
-        println!("  Found episode: {}", uuid);
-      }
+      if let Value::UUID(uuid) = &row[0] {}
     }
 
     // Should find 2 episodes (the ones from 1 and 2 hours ago)

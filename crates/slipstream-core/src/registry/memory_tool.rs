@@ -7,6 +7,12 @@ pub struct MemoryToolRegistry {
   store: dashmap::DashMap<Vec<u8>, ToolDefinition>,
 }
 
+impl Default for MemoryToolRegistry {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl MemoryToolRegistry {
   pub fn new() -> Self {
     Self {
@@ -88,9 +94,9 @@ mod tests {
 
   fn create_test_tool(name: &str) -> ToolDefinition {
     ToolDefinition {
-      slug: format!("tool-{}", name),
+      slug: format!("tool-{name}"),
       name: name.to_string(),
-      description: Some(format!("Test tool {}", name)),
+      description: Some(format!("Test tool {name}")),
       version: "1.0.0".to_string(),
       arguments: Some(schema_for!(bool)),
       provider: ToolProvider::Local,
@@ -164,8 +170,8 @@ mod tests {
   ) {
     // Add multiple tools
     for i in 1..=10 {
-      let tool = create_test_tool(&format!("tool{:02}", i));
-      registry.put(format!("tool{:02}", i), tool).await.unwrap();
+      let tool = create_test_tool(&format!("tool{i:02}"));
+      registry.put(format!("tool{i:02}"), tool).await.unwrap();
     }
 
     // Test no pagination (all keys)

@@ -7,6 +7,12 @@ pub struct MemoryAgentRegistry {
   store: dashmap::DashMap<Vec<u8>, AgentDefinition>,
 }
 
+impl Default for MemoryAgentRegistry {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl MemoryAgentRegistry {
   pub fn new() -> Self {
     Self {
@@ -141,9 +147,9 @@ mod tests {
         output_modalities: vec![Modality::Text],
         dialect: None,
       },
-      description: Some(format!("Test agent {}", name)),
+      description: Some(format!("Test agent {name}")),
       version: "1.0.0".to_string(),
-      slug: format!("agent-{}", name),
+      slug: format!("agent-{name}"),
       available_tools: vec![ToolDefinition {
         slug: "tool1".to_string(),
         name: "Test Tool".to_string(),

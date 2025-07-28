@@ -383,7 +383,6 @@ mod tests {
       } else {
         assert_roundtrip(in_val);
       }
-      println!("ok – {name}");
     }
   }
 
@@ -448,10 +447,9 @@ mod tests {
     ];
     for (name, in_val, want) in cases {
       let got = serde_json::to_string(in_val).unwrap();
-      println!("Testing: {name}");
+
       json_eq(&got, want);
       assert_roundtrip(in_val);
-      println!("ok – {name}");
     }
   }
 
@@ -485,7 +483,7 @@ mod tests {
 
   #[test]
   fn very_large_content() {
-    let big = iter::repeat('a').take(1 << 20).collect::<String>(); // 1 MiB
+    let big = "a".repeat(1 << 20); // 1 MiB
     let cop = ContentOrParts::Content(big.clone());
     assert_roundtrip(&cop);
     match &cop {

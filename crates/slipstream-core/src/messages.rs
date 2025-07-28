@@ -117,16 +117,15 @@ impl<'de> Deserialize<'de> for ModelMessage {
           match type_str.as_str() {
             "user" | "tool_response" | "retry" => Request::deserialize(value)
               .map(ModelMessage::Request)
-              .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e))),
+              .map_err(|e| D::Error::custom(format!("Invalid {type_str} message: {e}"))),
             "assistant" | "tool_call" => Response::deserialize(value)
               .map(ModelMessage::Response)
-              .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e))),
+              .map_err(|e| D::Error::custom(format!("Invalid {type_str} message: {e}"))),
             "instructions" | "system" | "developer" => InstructionsMessage::deserialize(value)
               .map(ModelMessage::Instructions)
-              .map_err(|e| D::Error::custom(format!("Invalid {} message: {}", type_str, e))),
+              .map_err(|e| D::Error::custom(format!("Invalid {type_str} message: {e}"))),
             unknown => Err(D::Error::custom(format!(
-              "Unknown message type '{}'. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer",
-              unknown
+              "Unknown message type '{unknown}'. Valid types are: user, assistant, tool_call, tool_response, retry, instructions, system, developer"
             ))),
           }
         }
@@ -609,8 +608,7 @@ mod tests {
       .instructions("test instructions");
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"instructions","content":"test instructions","sender":"system","timestamp":"{}","meta":{{"key":"value"}}}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"instructions","content":"test instructions","sender":"system","timestamp":"{now_str}","meta":{{"key":"value"}}}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<ModelMessage> = serde_json::from_str(&data).unwrap();
@@ -625,8 +623,7 @@ mod tests {
       .user_prompt("hello");
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"user","content":"hello","sender":"user","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"user","content":"hello","sender":"user","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
@@ -649,8 +646,7 @@ mod tests {
       ]);
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"user","content":[{{"type":"text","text":"hello"}},{{"type":"image","image_url":"http://example.com/image.jpg"}}],"sender":"user","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"user","content":[{{"type":"text","text":"hello"}},{{"type":"image","image_url":"http://example.com/image.jpg"}}],"sender":"user","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
@@ -665,8 +661,7 @@ mod tests {
       .assistant_message("hello");
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"assistant","content":"hello","sender":"assistant","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"assistant","content":"hello","sender":"assistant","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
@@ -688,8 +683,7 @@ mod tests {
       ]);
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"assistant","content":[{{"type":"text","text":"hello"}},{{"type":"refusal","refusal":"cannot do that"}}],"sender":"assistant","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"assistant","content":[{{"type":"text","text":"hello"}},{{"type":"refusal","refusal":"cannot do that"}}],"sender":"assistant","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
@@ -704,8 +698,7 @@ mod tests {
       .assistant_refusal("cannot do that");
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"assistant","refusal":"cannot do that","sender":"assistant","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"assistant","refusal":"cannot do that","sender":"assistant","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
@@ -724,8 +717,7 @@ mod tests {
       }]);
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"tool_call","tool_calls":[{{"id":"123","name":"test_tool","arguments":"{{\"arg\":\"value\"}}"}}],"sender":"assistant","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"tool_call","tool_calls":[{{"id":"123","name":"test_tool","arguments":"{{\"arg\":\"value\"}}"}}],"sender":"assistant","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Response> = serde_json::from_str(&data).unwrap();
@@ -740,8 +732,7 @@ mod tests {
       .tool_response("123", "test_tool", "tool result");
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"tool_response","tool_name":"test_tool","tool_call_id":"123","content":"tool result","sender":"tool","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"tool_response","tool_name":"test_tool","tool_call_id":"123","content":"tool result","sender":"tool","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
@@ -756,8 +747,7 @@ mod tests {
       .tool_error("123", "test_tool", "test error");
     let data = serde_json::to_string(&msg).unwrap();
     let expected = format!(
-      r#"{{"run_id":"{}","turn_id":"{}","type":"retry","error":"test error","tool_name":"test_tool","tool_call_id":"123","sender":"tool","timestamp":"{}"}}"#,
-      run_id, turn_id, now_str
+      r#"{{"run_id":"{run_id}","turn_id":"{turn_id}","type":"retry","error":"test error","tool_name":"test_tool","tool_call_id":"123","sender":"tool","timestamp":"{now_str}"}}"#
     );
     assert_json_eq(&data, &expected);
     let decoded: Message<Request> = serde_json::from_str(&data).unwrap();
@@ -830,14 +820,11 @@ mod tests {
       let err_response = serde_json::from_str::<Message<Response>>(json).err();
       let err_model_message = serde_json::from_str::<Message<ModelMessage>>(json).err();
 
-      let err_string = format!("{:?}{:?}{:?}", err_request, err_response, err_model_message);
+      let err_string = format!("{err_request:?}{err_response:?}{err_model_message:?}");
 
       assert!(
         err_string.contains(expected_error),
-        "Test '{}' failed: expected error containing '{}', but got '{}'",
-        name,
-        expected_error,
-        err_string
+        "Test '{name}' failed: expected error containing '{expected_error}', but got '{err_string}'"
       );
     }
   }

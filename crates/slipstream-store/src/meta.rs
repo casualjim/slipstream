@@ -454,8 +454,6 @@ mod tests {
     assert!(v2 > v1, "Version should increment after changes");
 
     // Demonstrate that each operation creates a new version
-    println!("Initial version after create: {}", v1);
-    println!("Version after append: {}", v2);
   }
 
   #[tokio::test]
@@ -629,17 +627,6 @@ mod tests {
       row_4_count, 0,
       "Row with id='4' should not exist after rollback"
     );
-
-    println!("✅ LanceDB 2PC roll-forward rollback works!");
-    println!("   - Initial version: {} (2 rows)", initial_version);
-    println!("   - After commit: {} (3 rows)", version_after_commit);
-    println!("   - Before rollback: {} (4 rows)", version_before_rollback);
-    println!(
-      "   - After rollback: {} (3 rows - restored to checkpoint)",
-      version_after_rollback
-    );
-    println!("   - Roll-forward approach preserves full audit trail");
-    println!("   - Data is correctly restored to checkpoint state");
   }
 
   #[tokio::test]
@@ -1070,8 +1057,6 @@ mod tests {
       .await
       .expect("MergeInsert should work on empty table");
 
-    println!("MergeInsert on empty table returned version: {}", version);
-
     // Check if data was actually saved
     let query2 = crate::operations::PrimaryStoreQuery {
       table: "merge_test_empty",
@@ -1090,10 +1075,6 @@ mod tests {
     assert_eq!(
       total_rows, 2,
       "Should have 2 rows after MergeInsert on empty table"
-    );
-    println!(
-      "SUCCESS: MergeInsert on empty table works: saved {} rows in version {}",
-      total_rows, version
     );
 
     // Test scenario 3: Reproduce the exact episode table schema behavior
@@ -1150,11 +1131,6 @@ mod tests {
       .await
       .expect("MergeInsert should work on non-empty table");
 
-    println!(
-      "MergeInsert on non-empty table returned version: {}",
-      version2
-    );
-
     // Check if both episodes were saved
     let query = crate::operations::PrimaryStoreQuery {
       table: "episodes_test",
@@ -1170,11 +1146,8 @@ mod tests {
     let results: Vec<RecordBatch> = stream.try_collect().await.expect("Failed to collect");
     let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
 
-    println!("Episodes table has {} rows after MergeInsert", total_rows);
-
     // Since we added two episodes with MergeInsert, we should have 2 rows
     assert_eq!(total_rows, 2, "Should have 2 rows after both MergeInserts");
-    println!("SUCCESS: MergeInsert works correctly on both empty and non-empty tables");
   }
 
   #[tokio::test]
@@ -1215,15 +1188,8 @@ mod tests {
           .await;
 
         match index_result {
-          Ok(_) => {
-            println!("UNEXPECTED: Vector index creation succeeded on empty table");
-          }
-          Err(e) => {
-            println!(
-              "EXPECTED: Vector index creation failed on empty table: {}",
-              e
-            );
-          }
+          Ok(_) => {}
+          Err(e) => {}
         }
 
         Ok(())
@@ -1281,12 +1247,8 @@ mod tests {
           .await;
 
         match index_result {
-          Ok(_) => {
-            println!("SUCCESS: Vector index created on table with data");
-          }
-          Err(e) => {
-            println!("FAILED: Vector index creation failed even with data: {}", e);
-          }
+          Ok(_) => {}
+          Err(e) => {}
         }
 
         // Remove the dummy row
@@ -1294,7 +1256,6 @@ mod tests {
           .delete("uuid = '00000000-0000-0000-0000-000000000000'")
           .await?;
 
-        println!("Dummy row removed, table is now ready for real data");
         Ok(())
       })
     }))
@@ -1369,11 +1330,5 @@ mod tests {
 
     let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
     assert_eq!(total_rows, 1, "Vector search should return 1 result");
-
-    println!("✅ Embedding index workaround successful!");
-    println!("   1. Create table with dummy data (zero UUID)");
-    println!("   2. Create vector index (requires data to exist)");
-    println!("   3. Remove dummy data");
-    println!("   4. Table is ready for real data with working vector search");
   }
 }

@@ -7,6 +7,12 @@ pub struct MemoryModelRegistry {
   store: dashmap::DashMap<Vec<u8>, ModelDefinition>,
 }
 
+impl Default for MemoryModelRegistry {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl MemoryModelRegistry {
   pub fn new() -> Self {
     Self {
@@ -86,10 +92,10 @@ mod tests {
 
   fn create_test_model(name: &str) -> ModelDefinition {
     ModelDefinition {
-      id: format!("model-{}", name),
+      id: format!("model-{name}"),
       name: name.to_string(),
       provider: Provider::OpenAI,
-      description: Some(format!("Test model {}", name)),
+      description: Some(format!("Test model {name}")),
       context_size: 4096,
       max_tokens: Some(2048),
       temperature: Some(0.7),
