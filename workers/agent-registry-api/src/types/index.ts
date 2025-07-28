@@ -159,7 +159,9 @@ export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 export type Agent = z.infer<typeof AgentSchema>;
 
 // Use the generated Env interface directly
-export type AppEnv = Env;
+export interface AppEnv extends Env {
+
+}
 
 // Define our auth context type
 export type AuthContext = {

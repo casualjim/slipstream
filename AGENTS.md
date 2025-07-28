@@ -17,7 +17,7 @@ Slipstream follows a modular monolith architecture with a Rust workspace contain
 
 - **Backend Framework**: Rust with Tokio async runtime
 - **Web Framework**: Axum for REST API
-- **Databases**: 
+- **Databases**:
   - KuzuDB (graph database for indexing)
   - LanceDB (vector database for storage)
 - **Serialization**: Serde for JSON serialization/deserialization
@@ -200,16 +200,16 @@ To run only the tests for the workers:
 mise run test:workers
 ```
 
-To run the tests for just the slipstream-agents:
+To run the tests for just the agent-registry-api:
 
 ```sh
-mise run test:workers slipstream-agents
+mise run test:workers agent-registry-api
 ```
 
-To run the tests from a single file for just the slipstream-agents:
+To run the tests from a single file for just the agent-registry-api:
 
 ```sh
-mise run test:workers slipstream-agents relative/to/packagejson/file.test.ts
+mise run test:workers agent-registry-api relative/to/packagejson/file.test.ts
 ```
 
 To test only the Rust components:

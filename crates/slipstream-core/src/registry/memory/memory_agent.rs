@@ -1,4 +1,4 @@
-use super::Registry;
+use crate::registry::Registry;
 use crate::{Result, definitions::AgentDefinition, registry::Pagination};
 use async_trait::async_trait;
 
@@ -61,36 +61,27 @@ impl Registry for MemoryAgentRegistry {
     // Sort for consistent pagination
     keys.sort();
 
-    // Apply pagination
-    let start_index = if let Some(from) = pagination.from {
-      keys.binary_search(&from).unwrap_or_else(|x| x)
+    // 1-based page, default to 1 if not provided
+    let page = pagination.page.unwrap_or(1).max(1);
+    let per_page = pagination.per_page.unwrap_or(keys.len()).max(1);
+
+    let start_index = (page - 1) * per_page;
+    let end_index = std::cmp::min(start_index + per_page, keys.len());
+
+    let paged_keys = if start_index < keys.len() {
+      keys[start_index..end_index].to_vec()
     } else {
-      0
+      Vec::new()
     };
 
-    let end_index = if let Some(limit) = pagination.limit {
-      std::cmp::min(start_index + limit, keys.len())
-    } else {
-      keys.len()
-    };
-
-    Ok(
-      keys
-        .into_iter()
-        .skip(start_index)
-        .take(end_index - start_index)
-        .collect::<Vec<_>>(),
-    )
+    Ok(paged_keys)
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::definitions::{
-    AgentDefinition, Modality, ModelCapability, ModelDefinition, Provider, ToolDefinition,
-    ToolProvider,
-  };
+  use crate::definitions::AgentDefinition;
   use std::sync::Arc;
 
   fn assert_agent_eq(a: &AgentDefinition, b: &AgentDefinition) {
@@ -101,64 +92,23 @@ mod tests {
     assert_eq!(a.instructions, b.instructions);
 
     // Compare ModelDefinition fields
-    assert_eq!(a.model.id, b.model.id);
-    assert_eq!(a.model.name, b.model.name);
-    assert_eq!(a.model.provider, b.model.provider);
-    assert_eq!(a.model.description, b.model.description);
-    assert_eq!(a.model.context_size, b.model.context_size);
-    assert_eq!(a.model.max_tokens, b.model.max_tokens);
-    assert_eq!(a.model.temperature, b.model.temperature);
-    assert_eq!(a.model.top_p, b.model.top_p);
-    assert_eq!(a.model.frequency_penalty, b.model.frequency_penalty);
-    assert_eq!(a.model.presence_penalty, b.model.presence_penalty);
-    assert_eq!(a.model.capabilities, b.model.capabilities);
-    assert_eq!(a.model.input_modalities, b.model.input_modalities);
-    assert_eq!(a.model.output_modalities, b.model.output_modalities);
-    assert_eq!(a.model.dialect, b.model.dialect);
+    assert_eq!(a.model, b.model);
 
-    // Compare ToolDefinition fields
-    assert_eq!(a.available_tools.len(), b.available_tools.len());
-    for (tool_a, tool_b) in a.available_tools.iter().zip(b.available_tools.iter()) {
-      assert_eq!(tool_a.slug, tool_b.slug);
-      assert_eq!(tool_a.name, tool_b.name);
-      assert_eq!(tool_a.description, tool_b.description);
-      assert_eq!(tool_a.version, tool_b.version);
-      assert_eq!(tool_a.provider, tool_b.provider);
-      // Note: We skip comparing arguments (schemars::Schema) as it doesn't implement PartialEq
-    }
+    // Compare available_tools (now Vec<String>)
+    assert_eq!(a.available_tools, b.available_tools);
   }
 
   fn create_test_agent(name: &str) -> AgentDefinition {
     AgentDefinition {
       name: name.to_string(),
-      model: ModelDefinition {
-        id: "gpt-4".to_string(),
-        name: "GPT-4".to_string(),
-        provider: Provider::OpenAI,
-        description: Some("OpenAI GPT-4 model".to_string()),
-        context_size: 8192,
-        max_tokens: Some(4096),
-        temperature: Some(0.7),
-        top_p: Some(1.0),
-        frequency_penalty: Some(0.0),
-        presence_penalty: Some(0.0),
-        capabilities: vec![ModelCapability::Chat, ModelCapability::FunctionCalling],
-        input_modalities: vec![Modality::Text],
-        output_modalities: vec![Modality::Text],
-        dialect: None,
-      },
+      model: "gpt-4.1-nano".to_string(),
       description: Some(format!("Test agent {name}")),
       version: "1.0.0".to_string(),
       slug: format!("agent-{name}"),
-      available_tools: vec![ToolDefinition {
-        slug: "tool1".to_string(),
-        name: "Test Tool".to_string(),
-        description: Some("A test tool".to_string()),
-        version: "1.0.0".to_string(),
-        arguments: None,
-        provider: ToolProvider::Local,
-      }],
+      available_tools: vec!["local/tool1/1.0.0".to_string()],
       instructions: "You are a helpful assistant".to_string(),
+      organization: "test-org".to_string(),
+      project: "test-project".to_string(),
     }
   }
 
@@ -195,8 +145,8 @@ mod tests {
     // Test keys (no pagination)
     let keys = registry
       .keys(Pagination {
-        from: None,
-        limit: None,
+        page: None,
+        per_page: None,
       })
       .await
       .unwrap();
@@ -230,8 +180,7 @@ mod tests {
     let registry = create_registry();
     let agent1_v1 = create_test_agent("agent1");
     let mut agent1_v2 = create_test_agent("agent1");
-    agent1_v2.model.id = "gpt-4-turbo".to_string();
-    agent1_v2.model.name = "GPT-4 Turbo".to_string();
+    agent1_v2.model = "gpt-4.1-mini".to_string();
 
     // Put initial version
     registry.put("agent1".to_string(), agent1_v1).await.unwrap();
@@ -244,7 +193,6 @@ mod tests {
 
     // Verify updated version is retrieved
     let retrieved = registry.get("agent1".to_string()).await.unwrap().unwrap();
-    assert_eq!(retrieved.model.id, "gpt-4-turbo");
-    assert_eq!(retrieved.model.name, "GPT-4 Turbo");
+    assert_eq!(retrieved.model, "gpt-4.1-mini");
   }
 }

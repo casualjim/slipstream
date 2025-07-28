@@ -14,11 +14,11 @@
     {
       "binding": "DB",
       "database_name": "agent-registry-api",
-      "database_id": "5eb7b6ae-cb0a-4c8b-9c8b-84d3b208597c"
+      "database_id": "9c3491e8-6128-4e8a-9ed7-a17f96aa67f1"
     }
   ],
   "vars": {
-    "API_KEY": "test-api-key" // Development key
+
   }
   /**
    * Smart Placement

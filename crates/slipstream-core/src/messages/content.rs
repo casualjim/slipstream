@@ -293,7 +293,7 @@ pub fn video(data: Vec<u8>, format: &str) -> ContentPart {
 mod tests {
   use super::*;
   use serde_json::Value;
-  use std::{iter, sync::Arc, thread};
+  use std::{sync::Arc, thread};
 
   /* -------------------------------------------------- */
   /* helpers                                            */
@@ -438,7 +438,7 @@ mod tests {
         r#"[{"type":"refusal","refusal":"I cannot help with that"}]"#,
       ),
     ];
-    for (name, in_val, want) in cases {
+    for (_name, in_val, want) in cases {
       let got = serde_json::to_string(in_val).unwrap();
 
       json_eq(&got, want);

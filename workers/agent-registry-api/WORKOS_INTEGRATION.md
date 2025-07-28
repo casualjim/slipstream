@@ -1,67 +1,95 @@
-# WorkOS SCIM Integration Plan
+# WorkOS Integration Plan for User Management and API Key Authentication
 
-This document outlines the research and implementation plan for integrating WorkOS for SCIM-based authentication in the `slipstream-agents` worker. This will replace the existing simple bearer token authentication.
+This document outlines the research and implementation plan for integrating WorkOS for user management and a custom API key authentication system in the `slipstream-agents` worker. This will replace the existing simple bearer token authentication.
 
-## 1. Current Authentication
+## 1. Goal
 
-The current authentication mechanism is implemented in `src/middleware/auth.ts`. It's a basic bearer token authentication that checks against a single, static `API_KEY` stored in the environment. This is not suitable for a multi-tenant environment where different organizations need to connect their directories.
+The objective is to replace the current authentication middleware with a system where:
+-   Users are managed (created, read, updated, deleted) through WorkOS.
+-   Users can generate and use API keys to authenticate with the service.
 
-## 2. WorkOS SCIM Authentication
+WorkOS's User Management and AuthKit products are designed for interactive user sign-in flows (e.g., email/password, SSO) and do not provide a built-in solution for end-user API key generation and validation. Therefore, we will implement a hybrid approach: WorkOS for user lifecycle management and a custom solution for API keys.
 
-WorkOS provides Directory Sync functionality using the SCIM 2.0 protocol. The authentication method for SCIM is a long-lived bearer token. Each organization with a synced directory will have a unique SCIM endpoint and bearer token provided by WorkOS.
+## 2. Implementation Plan
 
-Our worker needs to expose a SCIM endpoint that can accept requests from various identity providers (like Okta, Entra ID, etc.) configured through WorkOS.
+### Step 1: User Management with WorkOS
 
-## 3. Implementation Plan
+We will use the [WorkOS User Management API](https://workos.com/docs/reference/user-management) as the source of truth for user and organization data.
 
-### Step 1: Storing SCIM Tokens
+-   **Dependencies**: We will need to add the `@workos-inc/node` SDK to the project.
+-   **Configuration**: The WorkOS API key and Client ID will be stored as secrets in the Cloudflare worker environment (e.g., `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`).
+-   **User Provisioning**: We will need to decide on a strategy for provisioning users in WorkOS. This could be done through an admin interface, an invitation flow, or by allowing users to sign up. For the initial implementation, we can assume users are provisioned manually or through a separate admin process.
 
-SCIM bearer tokens are sensitive and should be treated as secrets. We will use Cloudflare's secrets management for this.
+### Step 2: Custom API Key Management
 
-- For each organization, a unique SCIM bearer token will be generated in the WorkOS dashboard.
-- This token will be added as a secret to the Cloudflare worker environment. We can use a naming convention like `WORKOS_SCIM_TOKEN_<ORGANIZATION_SLUG>`.
-- We will also need to store a mapping from the token to the organization it belongs to. This can be done by convention in the secret name, or by having a separate secret that contains a JSON mapping of tokens to organization IDs. For simplicity, we'll start by iterating over the secrets.
+We will build a system for generating, storing, and validating API keys, backed by our D1 database.
 
-### Step 2: Create a New Authentication Middleware
+-   **Database Schema**: A new table, `api_keys`, will be created in the D1 database.
+    ```sql
+    CREATE TABLE api_keys (
+      id TEXT PRIMARY KEY,
+      hashed_key TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      organization_id TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP,
+      last_used_at TIMESTAMP,
+      name TEXT
+    );
+    ```
+-   **API Key Generation**:
+    -   We will create new API endpoints (e.g., `/api/keys`) for authenticated users to manage their API keys.
+    -   When a user requests a new key, we will generate a cryptographically secure random string.
+    -   The key will be hashed using a strong, one-way hashing algorithm (e.g., SHA-256) before being stored in the `hashed_key` column.
+    -   The unhashed key will be returned to the user **only once**. They will be responsible for storing it securely.
+-   **API Key Revocation**: Endpoints will be provided for users to delete (revoke) their API keys.
 
-We will create a new middleware, `workosAuth.ts`, in `src/middleware`. This middleware will replace the existing `bearerAuth` middleware.
+### Step 3: Authentication Middleware
 
-The logic for the middleware will be as follows:
+A new middleware, `apiKeyAuth.ts`, will be created to handle API key authentication.
 
-1.  **Extract the Bearer Token**: Get the token from the `Authorization` header. If it's not present or doesn't have the "Bearer " prefix, return a 401 Unauthorized error.
+1.  **Extract API Key**: The middleware will extract the key from the `Authorization: Bearer <key>` header.
 
-2.  **Validate the Token**:
-    -   Iterate through the `WORKOS_SCIM_TOKEN_*` secrets in the worker's environment (`c.env`).
-    -   Compare the extracted token with each of the stored secret tokens.
-    -   If a match is found, extract the organization slug from the secret's name.
+2.  **Validate Key**:
+    -   The provided key will be hashed.
+    -   The middleware will query the `api_keys` table in the D1 database for the `hashed_key`.
+    -   It will check if the key exists and has not expired.
 
-3.  **Set Organization Context**:
-    -   If a token is validated, set the organization context for downstream handlers. For example:
+3.  **Set User Context**:
+    -   If the key is valid, the `user_id` and `organization_id` will be retrieved from the database.
+    -   This information will be used to set the authentication context for the request, for example:
         ```typescript
         c.set('auth', {
-          organizationSlug: 'some-org', // Extracted from the secret name
+          userId: 'user_123',
+          organizationId: 'org_abc',
         });
         ```
+    -   The `last_used_at` timestamp for the key will be updated.
 
-4.  **Handle Invalid Tokens**: If the token does not match any of the stored secrets, return a 401 Unauthorized error.
+4.  **Handle Invalid Keys**: If the key is not found or is invalid, a 401 Unauthorized error will be returned.
 
-### Step 3: Update Environment and Configuration
+### Step 4: Integration
 
-- Add the new WorkOS SCIM secrets to `wrangler.toml` for local development (using `.dev.vars`) and to the Cloudflare dashboard for production.
-- The `worker-configuration.d.ts` file will need to be updated to reflect the new environment variables for the WorkOS SCIM tokens. We can use a more dynamic type to allow for multiple organization tokens.
+-   The new `apiKeyAuth` middleware will be applied to the relevant routes in `src/index.ts`, replacing the old `bearerAuth` middleware.
+-   The WorkOS SDK will be initialized in a shared context or on-demand in the service layer to interact with the WorkOS API for user management tasks.
 
-### Step 4: Integrate the Middleware
-
-- In `src/index.ts`, replace the `bearerAuth` middleware with the new `workosAuth` middleware on the routes that need to be protected. This will likely be all the SCIM-related endpoints.
-
-## 4. Example Middleware (`src/middleware/workosAuth.ts`)
+## 5. Example Middleware (`src/middleware/apiKeyAuth.ts`)
 
 ```typescript
 import type { MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AppHonoEnv } from "../types";
 
-export const workosAuth: MiddlewareHandler<AppHonoEnv> = async (c, next) => {
+// This is a simplified example. In a real implementation, you would use a
+// library like `crypto` to perform the hashing.
+async function hashApiKey(key: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(key);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export const apiKeyAuth: MiddlewareHandler<AppHonoEnv> = async (c, next) => {
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -69,34 +97,40 @@ export const workosAuth: MiddlewareHandler<AppHonoEnv> = async (c, next) => {
   }
 
   const token = authHeader.substring(7);
-  let organizationSlug: string | null = null;
+  const hashedToken = await hashApiKey(token);
 
-  for (const key in c.env) {
-    if (key.startsWith("WORKOS_SCIM_TOKEN_")) {
-      if (c.env[key] === token) {
-        organizationSlug = key.replace("WORKOS_SCIM_TOKEN_", "");
-        break;
-      }
-    }
+  const { results } = await c.env.DB.prepare(
+    "SELECT user_id, organization_id FROM api_keys WHERE hashed_key = ? AND (expires_at IS NULL OR expires_at > datetime('now'))"
+  ).bind(hashedToken).all();
+
+  if (!results || results.length === 0) {
+    throw new HTTPException(401, { message: "Invalid API key" });
   }
 
-  if (!organizationSlug) {
-    throw new HTTPException(401, { message: "Invalid SCIM token" });
-  }
+  const apiKey = results[0] as { user_id: string; organization_id: string };
 
-  // Set the organization context
+  // Update the last_used_at timestamp (fire and forget)
+  c.executionCtx.waitUntil(
+    c.env.DB.prepare("UPDATE api_keys SET last_used_at = datetime('now') WHERE hashed_key = ?")
+      .bind(hashedToken)
+      .run()
+  );
+
   c.set("auth", {
-    organizationSlug: organizationSlug,
+    userId: apiKey.user_id,
+    organizationId: apiKey.organization_id,
   });
 
   await next();
 };
 ```
 
-## 5. Next Steps
+## 6. Next Steps
 
-1.  Implement the `workosAuth.ts` middleware.
-2.  Update `wrangler.jsonc` and create a `.dev.vars` file for local testing with a dummy token.
-3.  Update `worker-configuration.d.ts` to include the new secrets.
-4.  Replace the old `bearerAuth` middleware in `src/index.ts`.
-5.  Add tests for the new middleware.
+1.  Add the `@workos-inc/node` dependency.
+2.  Add WorkOS secrets (`WORKOS_API_KEY`, `WORKOS_CLIENT_ID`) to the environment.
+3.  Create the `api_keys` table migration for D1.
+4.  Implement the API key management endpoints.
+5.  Implement the `apiKeyAuth.ts` middleware.
+6.  Integrate the new middleware and WorkOS SDK into the application.
+7.  Write tests for the new functionality.

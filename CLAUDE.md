@@ -17,7 +17,7 @@ Slipstream follows a modular monolith architecture with a Rust workspace contain
 
 - **Backend Framework**: Rust with Tokio async runtime
 - **Web Framework**: Axum for REST API
-- **Databases**: 
+- **Databases**:
   - KuzuDB (graph database for indexing)
   - LanceDB (vector database for storage)
 - **Serialization**: Serde for JSON serialization/deserialization
@@ -190,6 +190,29 @@ mise run build:rust
 
 ### Testing
 
+#### Auth for the agent registry
+
+To run the tests successfully you need to make sure that the agent registry is running and accessible.
+
+You should first check if it is already running by looking at the process list or using a tool like `ps` or `top`.
+
+If it is not running, you can start it by running:
+
+```sh
+bun run --cwd workers/agent-registry-api dev > dev.log &
+```
+
+It's important to background it if you're an LLM otherwise you can't make requests to it.
+
+Once the server is running you can set the following environment variables:
+
+```env
+SLIPSTREAM_BASE_URL=http://localhost:8787/api/v1
+SLIPSTREAM_API_KEY=test-api-key
+```
+
+#### Running tests
+
 To run all tests for the project:
 ```bash
 mise run test
@@ -200,16 +223,16 @@ To run only the tests for the workers:
 mise run test:workers
 ```
 
-To run the tests for just the slipstream-agents:
+To run the tests for just the agent-registry-api:
 
 ```sh
-mise run test:workers slipstream-agents
+mise run test:workers agent-registry-api
 ```
 
-To run the tests from a single file for just the slipstream-agents:
+To run the tests from a single file for just the agent-registry-api:
 
 ```sh
-mise run test:workers slipstream-agents relative/to/packagejson/file.test.ts
+mise run test:workers agent-registry-api relative/to/packagejson/file.test.ts
 ```
 
 To test only the Rust components:

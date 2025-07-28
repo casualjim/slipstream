@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
     }
     Err(err) => {
       tracing::error!("Failed to execute agent: {:?}", err);
-      return Err(err);
+      return Err(err.into());
     }
   }
 

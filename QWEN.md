@@ -17,7 +17,7 @@ Slipstream follows a modular monolith architecture with a Rust workspace contain
 
 - **Backend Framework**: Rust with Tokio async runtime
 - **Web Framework**: Axum for REST API
-- **Databases**: 
+- **Databases**:
   - KuzuDB (graph database for indexing)
   - LanceDB (vector database for storage)
 - **Serialization**: Serde for JSON serialization/deserialization

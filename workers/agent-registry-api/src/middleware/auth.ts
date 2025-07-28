@@ -11,6 +11,7 @@ export const bearerAuth: MiddlewareHandler<AppHonoEnv> = async (c, next) => {
 
   const token = auth.substring(7);
   if (token !== c.env.API_KEY) {
+    console.error(`Invalid API key provided: ${token} wanted ${c.env.API_KEY}`);
     throw new HTTPException(401, { message: "Invalid API key" });
   }
 

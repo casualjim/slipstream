@@ -87,7 +87,7 @@ To run the Slipstream server, you can use the following command:
 cargo run --package slipstream-server
 ```
 
-To run the workers, you can use the following command from the `workers/slipstream-agents` directory:
+To run the workers, you can use the following command from the `workers/agent-registry-api` directory:
 
 ```bash
 bun dev

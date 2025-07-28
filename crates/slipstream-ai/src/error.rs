@@ -29,12 +29,8 @@ pub enum Error {
   ParseInt(#[from] ParseIntError),
   #[error("Unknown provider: {0}")]
   UnknownProvider(String),
-}
-
-impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
-  fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-    Error::AgentTool(err.to_string())
-  }
+  #[error("{0}")]
+  Core(#[from] slipstream_core::Error),
 }
 
 #[cfg(test)]

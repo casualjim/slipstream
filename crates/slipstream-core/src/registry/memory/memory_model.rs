@@ -1,4 +1,4 @@
-use super::Registry;
+use crate::registry::Registry;
 use crate::{Result, definitions::ModelDefinition, registry::Pagination};
 use async_trait::async_trait;
 
@@ -61,26 +61,19 @@ impl Registry for MemoryModelRegistry {
     // Sort for consistent pagination
     keys.sort();
 
-    // Apply pagination
-    let start_index = if let Some(from) = pagination.from {
-      keys.binary_search(&from).unwrap_or_else(|x| x)
+    // 1-based page, default to 1 if not provided
+    let page = pagination.page.unwrap_or(1).max(1);
+    let per_page = pagination.per_page.unwrap_or(keys.len());
+    let start_index = (page - 1) * per_page;
+    let end_index = std::cmp::min(start_index + per_page, keys.len());
+
+    let paged_keys = if start_index < keys.len() {
+      keys[start_index..end_index].to_vec()
     } else {
-      0
+      Vec::new()
     };
 
-    let end_index = if let Some(limit) = pagination.limit {
-      std::cmp::min(start_index + limit, keys.len())
-    } else {
-      keys.len()
-    };
-
-    Ok(
-      keys
-        .into_iter()
-        .skip(start_index)
-        .take(end_index - start_index)
-        .collect::<Vec<_>>(),
-    )
+    Ok(paged_keys)
   }
 }
 
@@ -144,8 +137,8 @@ mod tests {
     // Test keys (no pagination)
     let keys = registry
       .keys(Pagination {
-        from: None,
-        limit: None,
+        page: None,
+        per_page: None,
       })
       .await
       .unwrap();

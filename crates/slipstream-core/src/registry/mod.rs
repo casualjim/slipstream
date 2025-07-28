@@ -1,28 +1,21 @@
-mod memory_agent;
-mod memory_model;
-mod memory_tool;
-mod http_model;
+pub mod http;
+pub mod memory;
 
 use crate::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
-pub use memory_agent::MemoryAgentRegistry;
-pub use memory_model::MemoryModelRegistry;
-pub use memory_tool::MemoryToolRegistry;
-pub use http_model::HttpModelRegistry;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pagination {
-  pub from: Option<String>,
-  pub limit: Option<usize>,
+  pub page: Option<usize>,
+  pub per_page: Option<usize>,
 }
 
 #[async_trait]
 pub trait Registry: Send + Sync {
   type Subject: Debug + Send + Sync + Serialize + for<'de> Deserialize<'de>;
-  type Key: AsRef<[u8]> + Send + Sync;
+  type Key: ToString + Send + Sync;
 
   /// Registers a tool with the registry.
   async fn put(&self, name: Self::Key, subject: Self::Subject) -> Result<()>;
