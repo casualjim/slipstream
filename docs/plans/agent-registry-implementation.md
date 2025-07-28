@@ -22,7 +22,7 @@ D1AutoEndpoint **DOES NOT**:
 ```jsonc
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "slipstream-agents",
+  "name": "agent-registry-api",
   "main": "src/index.ts",
   "compatibility_date": "2025-07-25",
   "observability": {
@@ -31,7 +31,7 @@ D1AutoEndpoint **DOES NOT**:
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "slipstream-agents",
+      "database_name": "agent-registry-api",
       "database_id": "5eb7b6ae-cb0a-4c8b-9c8b-84d3b208597c"
     }
   ],

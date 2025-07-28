@@ -420,7 +420,7 @@ Implement full CRUD operations for all endpoints under `/api/v1/`. All require b
    - Integration tests: Full API endpoints (including auth flows).
 
 5. **File locations**
-   - This assignment should be executed in workers/slipstream-agents
+   - This assignment should be executed in workers/agent-registry-api
 
 ---
 
