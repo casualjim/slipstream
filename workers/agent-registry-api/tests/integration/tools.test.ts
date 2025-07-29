@@ -110,6 +110,72 @@ describe("Tool API Integration Tests", () => {
       expect(body.success).toBe(false);
     });
 
+    describe("semver validation", () => {
+      it("should accept valid semver versions", async () => {
+        const validVersions = [
+          "1.0.0",
+          "1.2.3",
+          "0.0.1",
+          "1.0.0-alpha",
+          "1.0.0-alpha.1",
+          "1.0.0-0.3.7",
+          "1.0.0-x.7.z.92",
+          "1.0.0+build.123",
+          "1.0.0-alpha+build.456",
+          "2.0.0-beta.1+build.789",
+          "10.20.30",
+          "0.1.0",
+          "999.999.999",
+        ];
+
+        for (const version of validVersions) {
+          const toolData = {
+            name: `Test Tool ${version}`,
+            slug: `test-tool-${version.replace(/[^a-zA-Z0-9]/g, '-')}`,
+            version,
+            provider: "Local",
+          };
+
+          const response = await SELF.fetch(`http://local.test/api/v1/tools`, {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer test-api-key",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(toolData),
+          });
+
+          expect(response.status).toBeLessThan(400),
+            `Version ${version} should be valid but was rejected with status ${response.status}`;
+        }
+      });
+
+      it("should reject invalid semver versions", async () => {
+        const invalidVersions = ["", "1.2.3.4.5.6", "latest", "v1.0.0"];
+
+        for (const version of invalidVersions) {
+          const toolData = {
+            name: `Test Tool ${version || "empty"}`,
+            slug: `test-tool-${version.replace(/[^a-zA-Z0-9]/g, '-') || "empty"}`,
+            version,
+            provider: "Local",
+          };
+
+          const response = await SELF.fetch(`http://local.test/api/v1/tools`, {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer test-api-key",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(toolData),
+          });
+
+          expect(response.status).toBeGreaterThanOrEqual(400),
+            `Version "${version}" should be invalid but was accepted with status ${response.status}`;
+        }
+      });
+    });
+
     it("should autogenerate slug from name when not provided", async () => {
       const toolData = {
         name: "My Awesome Tool",

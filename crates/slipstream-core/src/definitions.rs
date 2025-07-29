@@ -1,92 +1,137 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
+use validator::Validate;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TypedBuilder, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentDefinition {
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent name cannot be empty"))]
   pub name: String,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent model cannot be empty"))]
   pub model: String,
+  #[builder(default, setter(strip_option, into))]
   pub description: Option<String>,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent version cannot be empty"))]
   pub version: String,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent slug cannot be empty"))]
   pub slug: String,
+  #[builder(default, setter(transform = |tools: impl IntoIterator<Item = impl Into<String>>| tools.into_iter().map(Into::into).collect()))]
   pub available_tools: Vec<String>,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent instructions cannot be empty"))]
   pub instructions: String,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent organization cannot be empty"))]
   pub organization: String,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Agent project cannot be empty"))]
   pub project: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(
+  Debug,
+  Clone,
+  PartialEq,
+  Eq,
+  Hash,
+  Serialize,
+  Deserialize,
+  TypedBuilder
+)]
+#[serde(try_from = "String", into = "String")]
 pub struct ToolRef {
+  #[builder(setter(into))]
   pub slug: String,
+  #[builder(default, setter(strip_option, into))]
   pub version: Option<String>,
   pub provider: ToolProvider,
 }
 
-impl ToString for ToolRef {
-  fn to_string(&self) -> String {
+impl std::fmt::Display for ToolRef {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     if let Some(version) = &self.version {
-      format!("{}/{}/{version}", self.provider, self.slug)
+      write!(
+        f,
+        "{}/{}/{}",
+        AsRef::<str>::as_ref(&self.provider).to_lowercase(),
+        self.slug,
+        version
+      )
     } else {
-      format!("{}/{}", self.provider, self.slug)
+      write!(
+        f,
+        "{}/{}",
+        AsRef::<str>::as_ref(&self.provider).to_lowercase(),
+        self.slug
+      )
     }
   }
 }
 
-impl ToolRef {
-  fn from_composed<S: Into<String>>(composed: S) -> Self {
-    let composed: String = composed.into();
-    let parts: Vec<&str> = composed.split('/').collect();
-    let provider = match parts.get(0).map(|v| v.to_lowercase()).as_deref() {
-      Some("client") => ToolProvider::Client,
-      Some("local") => ToolProvider::Local,
-      Some("mcp") => ToolProvider::MCP,
-      Some("restate") => ToolProvider::Restate,
-      _ => ToolProvider::Unknown,
+impl FromStr for ToolRef {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    let parts: Vec<&str> = s.split('/').collect();
+
+    if parts.len() < 2 {
+      return Err(format!(
+        "Invalid tool reference format: '{}'. Expected 'provider/slug' or 'provider/slug/version'",
+        s
+      ));
+    }
+
+    let provider_str = parts[0].to_lowercase();
+    let provider = ToolProvider::from_str(&provider_str)
+      .map_err(|_| format!("Unknown tool provider: '{}'", provider_str))?;
+
+    let slug = parts[1];
+    if slug.is_empty() {
+      return Err("Tool slug cannot be empty".to_string());
+    }
+
+    let version = if parts.len() > 2 {
+      let v = parts[2];
+      if v.is_empty() {
+        return Err("Tool version cannot be empty when specified".to_string());
+      }
+      Some(v.to_string())
+    } else {
+      None
     };
 
-    let slug = parts.get(1).unwrap_or(&"").to_string();
-    let version = parts.get(2).map(|v| v.to_string());
+    if parts.len() > 3 {
+      return Err(format!(
+        "Invalid tool reference format: '{}'. Too many components",
+        s
+      ));
+    }
 
-    Self {
-      slug,
+    Ok(Self {
+      slug: slug.to_string(),
       version,
       provider,
-    }
-  }
-
-  fn to_composed(&self) -> String {
-    let provider_str = match self.provider {
-      ToolProvider::Client => "client",
-      ToolProvider::Local => "local",
-      ToolProvider::MCP => "mcp",
-      ToolProvider::Restate => "restate",
-      ToolProvider::Unknown => "unknown",
-    };
-
-    match &self.version {
-      Some(version) => format!("{}/{}/{}", provider_str, self.slug, version),
-      None => format!("{}/{}", provider_str, self.slug),
-    }
+    })
   }
 }
 
-impl Serialize for ToolRef {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    serializer.serialize_str(&self.to_composed())
+impl From<ToolRef> for String {
+  fn from(tool_ref: ToolRef) -> Self {
+    tool_ref.to_string()
   }
 }
 
-impl<'de> Deserialize<'de> for ToolRef {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let composed = String::deserialize(deserializer)?;
-    Ok(Self::from_composed(composed))
+impl TryFrom<String> for ToolRef {
+  type Error = String;
+
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    Self::from_str(&value)
   }
 }
 
@@ -150,17 +195,27 @@ impl std::fmt::Display for ToolProvider {
   }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TypedBuilder, Validate)]
 pub struct ToolDefinition {
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Tool slug cannot be empty"))]
   pub slug: String,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Tool name cannot be empty"))]
   pub name: String,
+  #[builder(default, setter(strip_option, into))]
   pub description: Option<String>,
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Tool version cannot be empty"))]
   pub version: String,
+  #[builder(default)]
   pub arguments: Option<schemars::Schema>,
   pub provider: ToolProvider,
   #[serde(skip_serializing_if = "Option::is_none", alias = "createdAt")]
+  #[builder(default, setter(strip_option, into))]
   pub created_at: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none", alias = "updatedAt")]
+  #[builder(default, setter(strip_option, into))]
   pub updated_at: Option<String>,
 }
 
@@ -223,21 +278,633 @@ pub enum Provider {
   Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(
+  Debug,
+  Clone,
+  PartialEq,
+  Serialize,
+  Deserialize,
+  TypedBuilder,
+  Validate
+)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelDefinition {
-  pub id: String,                         // uuid7, readonly
-  pub name: String,                       // required
-  pub provider: Provider,                 // required
-  pub description: Option<String>,        // optional
-  pub context_size: u32,                  // required
-  pub max_tokens: Option<u32>,            // optional
-  pub temperature: Option<f32>,           // optional
-  pub top_p: Option<f32>,                 // optional
-  pub frequency_penalty: Option<f32>,     // optional
-  pub presence_penalty: Option<f32>,      // optional
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Model ID cannot be empty"))]
+  pub id: String, // uuid7, readonly
+  #[builder(setter(into))]
+  #[validate(length(min = 1, message = "Model name cannot be empty"))]
+  pub name: String, // required
+  pub provider: Provider, // required
+  #[builder(default, setter(strip_option, into))]
+  pub description: Option<String>, // optional
+  #[validate(range(min = 1, message = "Context size must be greater than 0"))]
+  pub context_size: u32, // required
+  #[builder(default, setter(strip_option))]
+  pub max_tokens: Option<u32>, // optional
+  #[builder(default, setter(strip_option))]
+  #[validate(range(
+    min = 0.0,
+    max = 2.0,
+    message = "Temperature must be between 0.0 and 2.0"
+  ))]
+  pub temperature: Option<f32>, // optional
+  #[builder(default, setter(strip_option))]
+  #[validate(range(min = 0.0, max = 1.0, message = "Top-p must be between 0.0 and 1.0"))]
+  pub top_p: Option<f32>, // optional
+  #[builder(default, setter(strip_option))]
+  #[validate(range(min = -2.0, max = 2.0, message = "Frequency penalty must be between -2.0 and 2.0"))]
+  pub frequency_penalty: Option<f32>, // optional
+  #[builder(default, setter(strip_option))]
+  #[validate(range(min = -2.0, max = 2.0, message = "Presence penalty must be between -2.0 and 2.0"))]
+  pub presence_penalty: Option<f32>, // optional
+  #[builder(setter(transform = |caps: impl IntoIterator<Item = ModelCapability>| caps.into_iter().collect()))]
+  #[validate(length(min = 1, message = "At least one capability is required"))]
   pub capabilities: Vec<ModelCapability>, // required to have at least 1
-  pub input_modalities: Vec<Modality>,    // required to have at least 1
-  pub output_modalities: Vec<Modality>,   // required to have at least 1
-  pub dialect: Option<ApiDialect>,        // optional
+  #[builder(setter(transform = |mods: impl IntoIterator<Item = Modality>| mods.into_iter().collect()))]
+  #[validate(length(min = 1, message = "At least one input modality is required"))]
+  pub input_modalities: Vec<Modality>, // required to have at least 1
+  #[builder(setter(transform = |mods: impl IntoIterator<Item = Modality>| mods.into_iter().collect()))]
+  #[validate(length(min = 1, message = "At least one output modality is required"))]
+  pub output_modalities: Vec<Modality>, // required to have at least 1
+  #[builder(default, setter(strip_option, into))]
+  pub dialect: Option<ApiDialect>, // optional
+}
+
+impl ModelDefinition {
+  /// # Builder Examples
+  ///
+  /// ## Basic Usage
+  /// ```rust
+  /// use slipstream_core::definitions::*;
+  ///
+  /// let model = ModelDefinition::builder()
+  ///     .id("gpt-4")
+  ///     .name("GPT-4")
+  ///     .provider(Provider::OpenAI)
+  ///     .context_size(8192)
+  ///     .capabilities([ModelCapability::Chat, ModelCapability::FunctionCalling])
+  ///     .input_modalities([Modality::Text])
+  ///     .output_modalities([Modality::Text])
+  ///     .temperature(0.7)
+  ///     .max_tokens(4096)
+  ///     .description("Advanced language model")
+  ///     .build();
+  /// ```
+  ///
+  /// ## Using Convenience Constructors
+  /// ```rust
+  /// use slipstream_core::definitions::*;
+  ///
+  /// // Chat model with sensible defaults
+  /// let chat_model = ModelDefinition::chat_model(
+  ///     "gpt-4",
+  ///     "GPT-4",
+  ///     Provider::OpenAI,
+  ///     8192
+  /// );
+  ///
+  /// // Embedding model
+  /// let embed_model = ModelDefinition::embedding_model(
+  ///     "text-embedding-ada-002",
+  ///     "Text Embedding Ada 002",
+  ///     Provider::OpenAI,
+  ///     8191
+  /// );
+  /// ```
+  /// Create a new ModelDefinition with required fields and validation
+  pub fn new(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    provider: Provider,
+    context_size: u32,
+    capabilities: impl Into<Vec<ModelCapability>>,
+    input_modalities: impl Into<Vec<Modality>>,
+    output_modalities: impl Into<Vec<Modality>>,
+  ) -> Result<Self, String> {
+    let capabilities = capabilities.into();
+    let input_modalities = input_modalities.into();
+    let output_modalities = output_modalities.into();
+
+    if capabilities.is_empty() {
+      return Err("At least one capability is required".to_string());
+    }
+    if input_modalities.is_empty() {
+      return Err("At least one input modality is required".to_string());
+    }
+    if output_modalities.is_empty() {
+      return Err("At least one output modality is required".to_string());
+    }
+
+    Ok(Self {
+      id: id.into(),
+      name: name.into(),
+      provider,
+      description: None,
+      context_size,
+      max_tokens: None,
+      temperature: None,
+      top_p: None,
+      frequency_penalty: None,
+      presence_penalty: None,
+      capabilities,
+      input_modalities,
+      output_modalities,
+      dialect: None,
+    })
+  }
+
+  /// Create a chat model with common defaults
+  pub fn chat_model(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    provider: Provider,
+    context_size: u32,
+  ) -> Self {
+    Self {
+      id: id.into(),
+      name: name.into(),
+      provider,
+      description: None,
+      context_size,
+      max_tokens: None,
+      temperature: Some(0.7),
+      top_p: Some(1.0),
+      frequency_penalty: None,
+      presence_penalty: None,
+      capabilities: vec![ModelCapability::Chat, ModelCapability::FunctionCalling],
+      input_modalities: vec![Modality::Text],
+      output_modalities: vec![Modality::Text],
+      dialect: None,
+    }
+  }
+
+  /// Create an embedding model
+  pub fn embedding_model(
+    id: impl Into<String>,
+    name: impl Into<String>,
+    provider: Provider,
+    context_size: u32,
+  ) -> Self {
+    Self {
+      id: id.into(),
+      name: name.into(),
+      provider,
+      description: None,
+      context_size,
+      max_tokens: None,
+      temperature: None,
+      top_p: None,
+      frequency_penalty: None,
+      presence_penalty: None,
+      capabilities: vec![ModelCapability::Embeddings],
+      input_modalities: vec![Modality::Text],
+      output_modalities: vec![Modality::Text],
+      dialect: None,
+    }
+  }
+}
+
+impl ToolRef {
+  /// # Builder Examples
+  ///
+  /// ## Using Builder
+  /// ```rust
+  /// use slipstream_core::definitions::*;
+  ///
+  /// let tool_ref = ToolRef::builder()
+  ///     .slug("my-tool")
+  ///     .provider(ToolProvider::MCP)
+  ///     .version("1.5.0")
+  ///     .build();
+  /// ```
+  ///
+  /// ## Using Convenience Constructors
+  /// ```rust
+  /// use slipstream_core::definitions::*;
+  ///
+  /// // Without version
+  /// let tool1 = ToolRef::new(ToolProvider::Local, "calculator");
+  ///
+  /// // With version
+  /// let tool2 = ToolRef::with_version(ToolProvider::Client, "web-search", "2.0.0");
+  /// ```
+  /// Create a new ToolRef with provider and slug
+  pub fn new(provider: ToolProvider, slug: impl Into<String>) -> Self {
+    Self {
+      slug: slug.into(),
+      version: None,
+      provider,
+    }
+  }
+
+  /// Create a ToolRef with a specific version
+  pub fn with_version(
+    provider: ToolProvider,
+    slug: impl Into<String>,
+    version: impl Into<String>,
+  ) -> Self {
+    Self {
+      slug: slug.into(),
+      version: Some(version.into()),
+      provider,
+    }
+  }
+}
+
+impl AgentDefinition {}
+
+impl ToolDefinition {}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_agent_definition_builder() {
+    let agent = AgentDefinition::builder()
+      .name("test-agent")
+      .model("gpt-4")
+      .version("1.0.0")
+      .slug("test-agent")
+      .instructions("You are a helpful assistant")
+      .organization("test-org")
+      .project("test-project")
+      .description("A test agent")
+      .available_tools(vec!["tool1", "tool2"])
+      .build();
+
+    assert_eq!(agent.name, "test-agent");
+    assert_eq!(agent.model, "gpt-4");
+    assert_eq!(agent.description, Some("A test agent".to_string()));
+    assert_eq!(agent.available_tools.len(), 2);
+  }
+
+  #[test]
+  fn test_agent_definition_builder_minimal() {
+    let agent = AgentDefinition::builder()
+      .name("minimal-agent")
+      .model("gpt-3.5-turbo")
+      .version("1.0.0")
+      .slug("minimal-agent")
+      .instructions("Minimal instructions")
+      .organization("org")
+      .project("project")
+      .build();
+
+    assert_eq!(agent.name, "minimal-agent");
+    assert!(agent.description.is_none());
+    assert!(agent.available_tools.is_empty());
+  }
+
+  #[test]
+  fn test_tool_ref_from_str_valid() {
+    // Test basic provider/slug format
+    let tool_ref = ToolRef::from_str("local/calculator").unwrap();
+    assert_eq!(tool_ref.provider, ToolProvider::Local);
+    assert_eq!(tool_ref.slug, "calculator");
+    assert_eq!(tool_ref.version, None);
+
+    // Test provider/slug/version format
+    let tool_ref = ToolRef::from_str("mcp/file-manager/1.2.3").unwrap();
+    assert_eq!(tool_ref.provider, ToolProvider::MCP);
+    assert_eq!(tool_ref.slug, "file-manager");
+    assert_eq!(tool_ref.version, Some("1.2.3".to_string()));
+
+    // Test all providers
+    let providers = [
+      ("client", ToolProvider::Client),
+      ("local", ToolProvider::Local),
+      ("mcp", ToolProvider::MCP),
+      ("restate", ToolProvider::Restate),
+    ];
+
+    for (provider_str, expected_provider) in providers {
+      let tool_ref = ToolRef::from_str(&format!("{}/test-tool", provider_str)).unwrap();
+      assert_eq!(tool_ref.provider, expected_provider);
+      assert_eq!(tool_ref.slug, "test-tool");
+    }
+  }
+
+  #[test]
+  fn test_tool_ref_from_str_errors() {
+    // Test missing slug
+    assert!(ToolRef::from_str("local").is_err());
+    assert!(ToolRef::from_str("local/").is_err());
+
+    // Test empty input
+    assert!(ToolRef::from_str("").is_err());
+
+    // Test invalid provider
+    assert!(ToolRef::from_str("invalid/tool").is_err());
+
+    // Test empty version when specified
+    assert!(ToolRef::from_str("local/tool/").is_err());
+
+    // Test too many components
+    assert!(ToolRef::from_str("local/tool/1.0.0/extra").is_err());
+  }
+
+  #[test]
+  fn test_tool_ref_display() {
+    // Test without version
+    let tool_ref = ToolRef {
+      slug: "calculator".to_string(),
+      version: None,
+      provider: ToolProvider::Local,
+    };
+    assert_eq!(tool_ref.to_string(), "local/calculator");
+
+    // Test with version
+    let tool_ref = ToolRef {
+      slug: "file-manager".to_string(),
+      version: Some("1.2.3".to_string()),
+      provider: ToolProvider::MCP,
+    };
+    assert_eq!(tool_ref.to_string(), "mcp/file-manager/1.2.3");
+  }
+
+  #[test]
+  fn test_tool_ref_roundtrip() {
+    let test_cases = [
+      "local/calculator",
+      "mcp/file-manager/1.2.3",
+      "client/browser-tool",
+      "restate/workflow/2.0.0",
+    ];
+
+    for case in test_cases {
+      let parsed = ToolRef::from_str(case).unwrap();
+      let serialized = parsed.to_string();
+      assert_eq!(case, serialized);
+    }
+  }
+
+  #[test]
+  fn test_tool_ref_serde() {
+    use serde_json;
+
+    // Test serialization
+    let tool_ref = ToolRef {
+      slug: "test-tool".to_string(),
+      version: Some("1.0.0".to_string()),
+      provider: ToolProvider::Local,
+    };
+    let json = serde_json::to_string(&tool_ref).unwrap();
+    assert_eq!(json, "\"local/test-tool/1.0.0\"");
+
+    // Test deserialization
+    let deserialized: ToolRef = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.provider, ToolProvider::Local);
+    assert_eq!(deserialized.slug, "test-tool");
+    assert_eq!(deserialized.version, Some("1.0.0".to_string()));
+
+    // Test invalid JSON deserialization
+    let invalid_json = "\"invalid\"";
+    let result: Result<ToolRef, _> = serde_json::from_str(invalid_json);
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_tool_ref_builder() {
+    let tool_ref = ToolRef::builder()
+      .slug("test-tool")
+      .provider(ToolProvider::Local)
+      .version("2.0.0")
+      .build();
+
+    assert_eq!(tool_ref.slug, "test-tool");
+    assert_eq!(tool_ref.provider, ToolProvider::Local);
+    assert_eq!(tool_ref.version, Some("2.0.0".to_string()));
+  }
+
+  #[test]
+  fn test_tool_ref_convenience_constructors() {
+    let tool_ref1 = ToolRef::new(ToolProvider::MCP, "my-tool");
+    assert_eq!(tool_ref1.slug, "my-tool");
+    assert_eq!(tool_ref1.provider, ToolProvider::MCP);
+    assert!(tool_ref1.version.is_none());
+
+    let tool_ref2 = ToolRef::with_version(ToolProvider::Client, "versioned-tool", "1.5.0");
+    assert_eq!(tool_ref2.slug, "versioned-tool");
+    assert_eq!(tool_ref2.provider, ToolProvider::Client);
+    assert_eq!(tool_ref2.version, Some("1.5.0".to_string()));
+  }
+
+  #[test]
+  fn test_tool_definition_builder() {
+    let tool = ToolDefinition::builder()
+      .slug("test-tool")
+      .name("Test Tool")
+      .version("1.0.0")
+      .provider(ToolProvider::Local)
+      .description("A test tool")
+      .build();
+
+    assert_eq!(tool.slug, "test-tool");
+    assert_eq!(tool.name, "Test Tool");
+    assert_eq!(tool.provider, ToolProvider::Local);
+    assert_eq!(tool.description, Some("A test tool".to_string()));
+    assert!(tool.arguments.is_none());
+    assert!(tool.created_at.is_none());
+    assert!(tool.updated_at.is_none());
+  }
+
+  #[test]
+  fn test_model_definition_builder() {
+    let model = ModelDefinition::builder()
+      .id("model-123")
+      .name("GPT-4")
+      .provider(Provider::OpenAI)
+      .context_size(8192)
+      .capabilities([ModelCapability::Chat, ModelCapability::FunctionCalling])
+      .input_modalities([Modality::Text])
+      .output_modalities([Modality::Text])
+      .temperature(0.7)
+      .max_tokens(4096)
+      .build();
+
+    assert_eq!(model.id, "model-123");
+    assert_eq!(model.name, "GPT-4");
+    assert_eq!(model.provider, Provider::OpenAI);
+    assert_eq!(model.context_size, 8192);
+    assert_eq!(model.capabilities.len(), 2);
+    assert_eq!(model.temperature, Some(0.7));
+    assert_eq!(model.max_tokens, Some(4096));
+  }
+
+  #[test]
+  fn test_model_definition_chat_convenience() {
+    let model = ModelDefinition::chat_model("gpt-4", "GPT-4", Provider::OpenAI, 8192);
+
+    assert_eq!(model.id, "gpt-4");
+    assert_eq!(model.name, "GPT-4");
+    assert_eq!(model.provider, Provider::OpenAI);
+    assert_eq!(model.context_size, 8192);
+    assert!(model.capabilities.contains(&ModelCapability::Chat));
+    assert!(
+      model
+        .capabilities
+        .contains(&ModelCapability::FunctionCalling)
+    );
+    assert_eq!(model.temperature, Some(0.7));
+    assert_eq!(model.top_p, Some(1.0));
+  }
+
+  #[test]
+  fn test_model_definition_embedding_convenience() {
+    let model = ModelDefinition::embedding_model(
+      "text-embedding-ada-002",
+      "Text Embedding Ada 002",
+      Provider::OpenAI,
+      8191,
+    );
+
+    assert_eq!(model.id, "text-embedding-ada-002");
+    assert_eq!(model.name, "Text Embedding Ada 002");
+    assert_eq!(model.provider, Provider::OpenAI);
+    assert_eq!(model.context_size, 8191);
+    assert!(model.capabilities.contains(&ModelCapability::Embeddings));
+    assert_eq!(model.capabilities.len(), 1);
+    assert!(model.temperature.is_none());
+  }
+
+  #[test]
+  fn test_model_definition_validation() {
+    // Valid model should pass validation
+    let valid_model = ModelDefinition::chat_model("test", "Test", Provider::OpenAI, 1000);
+    assert!(Validate::validate(&valid_model).is_ok());
+
+    // Model with invalid temperature should fail
+    let invalid_temp_model = ModelDefinition::builder()
+      .id("test")
+      .name("Test")
+      .provider(Provider::OpenAI)
+      .context_size(1000)
+      .capabilities([ModelCapability::Chat])
+      .input_modalities([Modality::Text])
+      .output_modalities([Modality::Text])
+      .temperature(3.0)
+      .build();
+    assert!(Validate::validate(&invalid_temp_model).is_err());
+
+    // Model with invalid top_p should fail
+    let invalid_top_p_model = ModelDefinition::builder()
+      .id("test")
+      .name("Test")
+      .provider(Provider::OpenAI)
+      .context_size(1000)
+      .capabilities([ModelCapability::Chat])
+      .input_modalities([Modality::Text])
+      .output_modalities([Modality::Text])
+      .top_p(1.5)
+      .build();
+    assert!(Validate::validate(&invalid_top_p_model).is_err());
+
+    // Model with no capabilities should fail validation at build time
+    // This test is no longer needed since typed-builder prevents empty required fields
+  }
+
+  #[test]
+  fn test_agent_definition_validation() {
+    let valid_agent = AgentDefinition::builder()
+      .name("test-agent")
+      .model("gpt-4")
+      .version("1.0.0")
+      .slug("test-agent")
+      .instructions("You are helpful")
+      .organization("org")
+      .project("project")
+      .build();
+
+    assert!(Validate::validate(&valid_agent).is_ok());
+
+    // Empty name should fail validation
+    let invalid_agent = AgentDefinition::builder()
+      .name("")
+      .model("gpt-4")
+      .version("1.0.0")
+      .slug("test-agent")
+      .instructions("You are helpful")
+      .organization("org")
+      .project("project")
+      .build();
+    assert!(Validate::validate(&invalid_agent).is_err());
+
+    // Empty instructions should fail validation
+    let invalid_agent2 = AgentDefinition::builder()
+      .name("test-agent")
+      .model("gpt-4")
+      .version("1.0.0")
+      .slug("test-agent")
+      .instructions("")
+      .organization("org")
+      .project("project")
+      .build();
+    assert!(Validate::validate(&invalid_agent2).is_err());
+  }
+
+  #[test]
+  fn test_tool_definition_validation() {
+    let valid_tool = ToolDefinition::builder()
+      .slug("test-tool")
+      .name("Test Tool")
+      .version("1.0.0")
+      .provider(ToolProvider::Local)
+      .build();
+
+    assert!(Validate::validate(&valid_tool).is_ok());
+
+    // Empty slug should fail validation
+    let invalid_tool = ToolDefinition::builder()
+      .slug("")
+      .name("Test Tool")
+      .version("1.0.0")
+      .provider(ToolProvider::Local)
+      .build();
+    assert!(Validate::validate(&invalid_tool).is_err());
+
+    // Empty version should fail validation
+    let invalid_tool2 = ToolDefinition::builder()
+      .slug("test-tool")
+      .name("Test Tool")
+      .version("")
+      .provider(ToolProvider::Local)
+      .build();
+    assert!(Validate::validate(&invalid_tool2).is_err());
+  }
+
+  #[test]
+  fn test_builder_into_setters() {
+    // Test that Vec setters accept Into<Vec<T>>
+    let model = ModelDefinition::builder()
+      .id("test")
+      .name("Test")
+      .provider(Provider::OpenAI)
+      .context_size(1000)
+      .capabilities([ModelCapability::Chat, ModelCapability::Embeddings])
+      .input_modalities([Modality::Text])
+      .output_modalities([Modality::Text, Modality::Image])
+      .build();
+
+    assert_eq!(model.capabilities.len(), 2);
+    assert_eq!(model.input_modalities.len(), 1);
+    assert_eq!(model.output_modalities.len(), 2);
+
+    // Test that available_tools accepts Into<Vec<String>>
+    let agent = AgentDefinition::builder()
+      .name("test")
+      .model("gpt-4")
+      .version("1.0.0")
+      .slug("test")
+      .instructions("test")
+      .organization("org")
+      .project("project")
+      .available_tools(["tool1", "tool2"])
+      .build();
+
+    assert_eq!(agent.available_tools.len(), 2);
+    assert_eq!(agent.available_tools[0], "tool1");
+    assert_eq!(agent.available_tools[1], "tool2");
+  }
 }

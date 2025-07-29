@@ -19,6 +19,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
+validator.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

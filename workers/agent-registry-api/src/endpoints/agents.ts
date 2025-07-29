@@ -4,12 +4,12 @@ import { z } from "zod";
 import { ModelService, ProjectService, ToolService } from "../lib/services";
 import { generateSlug } from "../lib/utils";
 import type { HandleArgs } from "../types";
-import { AgentSchema } from "../types";
+import { AgentSchema, semverSchema } from "../types";
 
 const agentMeta = {
   fields: z.object({
     name: z.string(),
-    version: z.string(),
+    version: semverSchema,
     description: z.string().nullish(),
     model: z.string(),
     instructions: z.string(),
@@ -44,6 +44,11 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
   async before(data: any): Promise<any> {
     const [c] = this.args;
     const auth = c.get("auth");
+
+    // Validate version format
+    if (!semverSchema.safeParse(data.version).success) {
+      throw new HTTPException(400, { message: "Invalid semantic version" });
+    }
 
     // Generate slug from name
     const slug = generateSlug(data.name);

@@ -1,6 +1,17 @@
 import type { Context } from "hono";
 import { z } from "zod";
 
+// Regex constants
+const SLUG_REGEX = /^[A-Za-z0-9-]{3,}$/;
+const NAME_REGEX = /^[A-Za-z0-9]+[\w\s]{2,}.*$/;
+const SEMVER_REGEX = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+// Error message constants
+const NAME_ERROR = "Name must contain at least 3 alphanumeric characters";
+const SLUG_ERROR = "Slug must be at least 3 alphanumeric characters";
+const DATE_ERROR = "Must be a valid ISO 8601 date string";
+const SEMVER_ERROR = "Must be a valid semantic version without 'v' prefix (e.g., 1.2.3, 2.0.0-alpha.1)";
+
 // Constants for seed data
 export const WAGYU_ORGANIZATION_SLUG = "wagyu";
 export const WAGYU_PROJECT_SLUG = "wagyu-project";
@@ -52,74 +63,91 @@ export enum Provider {
   OPENROUTER = "OpenRouter",
 }
 
-// Simple JSON array transformer for D1
-const jsonArray = z.string().transform((val) => {
-  try {
-    return JSON.parse(val);
-  } catch {
-    return [];
-  }
-});
+// Strict array validation: only accept arrays, never stringified JSON
+const jsonArray = z.array(z.unknown());
 
-// Keep schemas minimal - let D1AutoEndpoint handle most validation
+// Semver validation using regex (no 'v' prefix allowed)
+export const semverSchema = z.string().regex(SEMVER_REGEX, { message: SEMVER_ERROR });
+
+// ISO date validation
+const isoDate = z.string().trim().refine((val) => !isNaN(Date.parse(val)), { message: DATE_ERROR });
+
+/**
+ * Organization entity schema
+ */
 export const OrganizationSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-]{3,}$/),
-  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
+  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
   description: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: isoDate,
+  updatedAt: isoDate,
 });
 
+/**
+ * Project entity schema
+ */
 export const ProjectSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-]{3,}$/),
-  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
+  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
   description: z.string().nullish(),
-  organization: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  organization: z.string().trim().min(1),
+  createdAt: isoDate,
+  updatedAt: isoDate,
 });
 
+/**
+ * User entity schema
+ */
 export const UserSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string(),
+  id: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  email: z.string().trim().min(1),
   organizations: jsonArray,
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: isoDate,
+  updatedAt: isoDate,
 });
 
+/**
+ * Tool entity schema
+ */
 export const ToolSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/),
-  version: z.string(),
+  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
+  version: semverSchema,
   provider: z.nativeEnum(ToolProvider),
-  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
   description: z.string().nullish(),
-  arguments: z.record(z.any()).nullish(), // JSON Schema object
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  arguments: z.record(z.unknown()).nullish(), // JSON Schema object
+  createdAt: isoDate,
+  updatedAt: isoDate,
 });
 
-// Schema for creating tools - slug is optional and will be auto-generated
+/**
+ * Schema for creating tools - slug is optional and will be auto-generated
+ */
 export const CreateToolSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/).optional(),
-  version: z.string(),
+  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR).optional(),
+  version: semverSchema,
   provider: z.nativeEnum(ToolProvider),
-  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters"),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
   description: z.string().optional(),
-  arguments: z.record(z.any()).optional(), // JSON Schema object
-
+  arguments: z.record(z.unknown()).optional(), // JSON Schema object
 });
 
-// Schema for updating tools - excludes primary keys
+/**
+ * Schema for updating tools - excludes primary keys
+ */
 export const UpdateToolSchema = z.object({
-  name: z.string().regex(/^[A-Za-z0-9]+[\w\s]{2,}.*$/, "Name must contain at least 3 alphanumeric characters").optional(),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).optional(),
   description: z.string().optional(),
-  arguments: z.record(z.any()).optional(), // JSON Schema object
+  arguments: z.record(z.unknown()).optional(), // JSON Schema object
 });
 
+/**
+ * Model provider entity schema
+ */
 export const ModelProviderSchema = z.object({
-  id: z.string(),
-  name: z.string(),
+  id: z.string().trim().min(1),
+  name: z.string().trim().min(1),
   provider: z.nativeEnum(Provider),
   description: z.string().nullish(),
   contextSize: z.number(),
@@ -134,20 +162,23 @@ export const ModelProviderSchema = z.object({
   dialect: z.nativeEnum(APIDialect).nullish(),
 });
 
+/**
+ * Agent entity schema
+ */
 export const AgentSchema = z.object({
-  slug: z.string().regex(/^[A-Za-z0-9-_]{3,}$/),
-  version: z.string(),
-  name: z.string().regex(/^[A-Za-z0-9]{3,}/, "Name must contain at least 3 alphanumeric characters"),
+  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
+  version: semverSchema,
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
   description: z.string().nullish(),
-  model: z.string(),
-  instructions: z.string(),
+  model: z.string().trim().min(1),
+  instructions: z.string().trim().min(1),
   availableTools: jsonArray.nullish(),
-  organization: z.string(),
-  project: z.string(),
-  createdBy: z.string(),
-  updatedBy: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  organization: z.string().trim().min(1),
+  project: z.string().trim().min(1),
+  createdBy: z.string().trim().min(1),
+  updatedBy: z.string().trim().min(1),
+  createdAt: isoDate,
+  updatedAt: isoDate,
 });
 
 // Re-export schemas for easier imports
@@ -159,9 +190,7 @@ export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 export type Agent = z.infer<typeof AgentSchema>;
 
 // Use the generated Env interface directly
-export interface AppEnv extends Env {
-
-}
+export interface AppEnv extends Env {}
 
 // Define our auth context type
 export type AuthContext = {
