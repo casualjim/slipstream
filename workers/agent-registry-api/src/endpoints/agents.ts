@@ -6,17 +6,20 @@ import { generateSlug } from "../lib/utils";
 import type { HandleArgs } from "../types";
 import { AgentSchema, semverSchema } from "../types";
 
+// Schema for API input, using array of strings for tools
+const InputAgentSchema = z.object({
+  name: AgentSchema.shape.name,
+  version: AgentSchema.shape.version,
+  description: AgentSchema.shape.description,
+  model: AgentSchema.shape.model,
+  instructions: AgentSchema.shape.instructions,
+  availableTools: z.array(z.string()).nullish().describe("A list of tools available to the agent, identified by their composite key."),
+  organization: AgentSchema.shape.organization,
+  project: AgentSchema.shape.project,
+});
+
 const agentMeta = {
-  fields: z.object({
-    name: z.string(),
-    version: semverSchema,
-    description: z.string().nullish(),
-    model: z.string(),
-    instructions: z.string(),
-    availableTools: z.array(z.string()).nullish(),
-    organization: z.string(),
-    project: z.string(),
-  }),
+  fields: InputAgentSchema,
   model: {
     schema: AgentSchema, // Uses existing schema with jsonArray for DB storage
     primaryKeys: ["slug", "version"],
@@ -37,9 +40,21 @@ const agentMeta = {
   pathParameters: ["slug", "version"],
 };
 
+/**
+ * ## Create Agent
+ *
+ * Creates a new agent within a specified organization and project.
+ * The agent's version must be a valid semantic version, and its slug is
+ * automatically generated from the name. It validates that the associated
+ * project, model, and tools exist and that the user has access to the
+ * specified organization.
+ */
 export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = agentMeta;
+  public static _meta = {
+    summary: "Create a new Agent",
+    description: "Creates a new agent in the registry",
+    ...agentMeta,
+  };
 
   async before(data: any): Promise<any> {
     const [c] = this.args;
@@ -114,9 +129,19 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Get Agent
+ *
+ * Retrieves a specific version of an agent by its slug and version.
+ * It ensures that the user has access to the organization the agent belongs to.
+ * This endpoint handles composite primary keys to fetch the correct agent.
+ */
 export class GetAgent extends D1ReadEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = agentMeta;
+  public static _meta = {
+    summary: "Get a specific Agent",
+    description: "Retrieves a single agent by its slug and version from the registry",
+    ...agentMeta,
+  };
 
   // Override to fix Chanfana bug with empty filters and handle composite keys
   async fetch(filters: any) {
@@ -149,19 +174,26 @@ export class GetAgent extends D1ReadEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Update Agent
+ *
+ * Updates an existing agent's properties.
+ * This endpoint allows for partial updates of fields like name, description,
+ * model, instructions, and available tools. It validates access to the agent
+ * and ensures that any updated model or tool IDs are valid.
+ */
 export class UpdateAgent extends D1UpdateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "Update an existing Agent",
+    description: "Updates an agent in the registry",
     ...agentMeta,
-    fields: z
-      .object({
-        name: z.string(),
-        description: z.string().nullish(),
-        model: z.string(),
-        instructions: z.string(),
-        availableTools: z.array(z.string()).nullish(),
-      })
-      .partial(), // Allow partial updates but exclude primary key fields
+    fields: InputAgentSchema.pick({
+      name: true,
+      description: true,
+      model: true,
+      instructions: true,
+      availableTools: true,
+    }).partial(),
   };
 
   async before(oldObj: Record<string, any>, filters: any): Promise<any> {
@@ -207,9 +239,19 @@ export class UpdateAgent extends D1UpdateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Delete Agent
+ *
+ * Deletes a specific version of an agent from the registry.
+ * It verifies that the user has the necessary permissions to delete the agent
+ * by checking their access to the associated organization.
+ */
 export class DeleteAgent extends D1DeleteEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = agentMeta;
+  public static _meta = {
+    summary: "Delete an Agent",
+    description: "Deletes an agent from the registry",
+    ...agentMeta,
+  };
 
   async before(oldObj: Record<string, any>, filters: any): Promise<any> {
     const [c] = this.args;
@@ -224,9 +266,17 @@ export class DeleteAgent extends D1DeleteEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## List Agents
+ *
+ * Retrieves a paginated list of agents, filtered by the user's organization access.
+ * It supports filtering by name, model, organization, and project, as well as
+ * searching by name and description. The results are ordered and paginated.
+ */
 export class ListAgents extends D1ListEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "List all Agents",
+    description: "Retrieves a list of all agents in the registry",
     ...agentMeta,
   };
 

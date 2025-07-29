@@ -13,12 +13,8 @@ import { OrganizationSchema } from "../types";
 
 const orgMeta = {
   fields: OrganizationSchema.pick({
-    // remove the createdAt, and updatedAt fields from the input, they are read-only
-    // and set by the system
-    // This allows D1AutoEndpoint to handle the rest of the validation
-    // and serialization
     name: true,
-    slug: true, // slug is already included, which is correct
+    slug: true,
     description: true,
   }),
   model: {
@@ -37,9 +33,19 @@ const readOnlyMeta = {
   pathParameters: orgMeta.pathParameters,
 };
 
+/**
+ * ## Create Organization
+ *
+ * Creates a new organization.
+ * It checks for slug uniqueness to ensure that each organization has a
+ * distinct identifier.
+ */
 export class CreateOrganization extends D1CreateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = orgMeta;
+  public static _meta = {
+    summary: "Create a new Organization",
+    description: "Creates a new organization in the registry",
+    ...orgMeta,
+  };
 
   async before(data: Organization): Promise<Organization> {
     // ALL database queries through service
@@ -55,9 +61,17 @@ export class CreateOrganization extends D1CreateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Get Organization
+ *
+ * Retrieves a specific organization by its slug.
+ */
 export class GetOrganization extends D1ReadEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = readOnlyMeta;
+  public static _meta = {
+    summary: "Get a specific Organization",
+    description: "Retrieves a single organization by its slug from the registry",
+    ...readOnlyMeta,
+  };
 
   // Override to fix Chanfana bug with empty filters
   async fetch(filters: any) {
@@ -80,15 +94,33 @@ export class GetOrganization extends D1ReadEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Update Organization
+ *
+ * Updates an existing organization's properties.
+ * Authentication is handled by middleware.
+ */
 export class UpdateOrganization extends D1UpdateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = orgMeta;
+  public static _meta = {
+    summary: "Update an existing Organization",
+    description: "Updates an organization in the registry",
+    ...orgMeta,
+  };
   // Simple CRUD - auth handled by middleware
 }
 
+/**
+ * ## Delete Organization
+ *
+ * Deletes an organization from the registry.
+ * It prevents deletion if the organization still has associated projects.
+ */
 export class DeleteOrganization extends D1DeleteEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = orgMeta;
+  public static _meta = {
+    summary: "Delete an Organization",
+    description: "Deletes an organization from the registry",
+    ...orgMeta,
+  };
 
   async before(_oldObj: Organization, filters: Filters): Promise<Filters> {
     const ff = filters.filters.find((f) => f.field === "slug");
@@ -109,9 +141,16 @@ export class DeleteOrganization extends D1DeleteEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## List Organizations
+ *
+ * Retrieves a list of all organizations.
+ * Supports filtering, searching, and ordering.
+ */
 export class ListOrganizations extends D1ListEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "List all Organizations",
+    description: "Retrieves a list of all organizations in the registry",
     ...readOnlyMeta,
   };
   filterFields = ["name", "slug"];

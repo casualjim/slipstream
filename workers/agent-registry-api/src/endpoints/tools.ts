@@ -54,9 +54,17 @@ const toolMeta = {
   },
   pathParameters: ["provider", "slug", "version"],
 };
+/**
+ * ## Create Tool
+ *
+ * Creates a new tool in the registry.
+ * The slug can be auto-generated from the name if not provided.
+ * It properly handles JSON serialization for the arguments field.
+ */
 export class CreateTool extends D1CreateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "Create a new Tool",
+    description: "Creates a new tool in the registry",
     ...toolMeta,
     fields: CreateToolSchema,
   };
@@ -87,9 +95,18 @@ export class CreateTool extends D1CreateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Get Tool
+ *
+ * Retrieves a specific version of a tool by its provider, slug, and version.
+ * This endpoint handles composite primary keys to fetch the correct tool.
+ */
 export class GetTool extends D1ReadEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = toolMeta;
+  public static _meta = {
+    summary: "Get a specific Tool",
+    description: "Retrieves a single tool by its provider, slug, and version from the registry",
+    ...toolMeta,
+  };
 
   // Override to fix Chanfana bug with empty filters
   async fetch(filters: any) {
@@ -112,9 +129,17 @@ export class GetTool extends D1ReadEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Update Tool
+ *
+ * Updates an existing tool's properties.
+ * This endpoint allows for partial updates of fields like name, description,
+ * and arguments.
+ */
 export class UpdateTool extends D1UpdateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "Update an existing Tool",
+    description: "Updates a tool in the registry",
     ...toolMeta,
     fields: UpdateToolSchema,
   };
@@ -143,15 +168,32 @@ export class UpdateTool extends D1UpdateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Delete Tool
+ *
+ * Deletes a specific version of a tool from the registry.
+ */
 export class DeleteTool extends D1DeleteEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = toolMeta;
+  public static _meta = {
+    summary: "Delete a Tool",
+    description: "Deletes a tool from the registry",
+    ...toolMeta,
+  };
 }
 
+/**
+ * ## List Tools
+ *
+ * Retrieves a list of all tools.
+ * Supports filtering by name, version, provider, and slug, as well as
+ * searching and ordering.
+ */
 export class ListTools extends D1ListEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
-    model: toolMeta.model,
+  public static _meta = {
+    summary: "List all Tools",
+    description: "Retrieves a list of all tools in the registry",
+    ...toolMeta,
+    fields: undefined, // Don't use fields for list endpoints
   };
 
   // @ts-ignore - chanfana has poor type definitions

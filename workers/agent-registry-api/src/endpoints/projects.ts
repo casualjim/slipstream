@@ -21,9 +21,19 @@ const projectMeta = {
   pathParameters: ["slug"],
 };
 
+/**
+ * ## Create Project
+ *
+ * Creates a new project within an organization.
+ * It validates that the user has access to the specified organization and
+ * ensures that the project slug is unique.
+ */
 export class CreateProject extends D1CreateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = projectMeta;
+  public static _meta = {
+    summary: "Create a new Project",
+    description: "Creates a new project in the registry",
+    ...projectMeta,
+  };
 
   async before(data: Project): Promise<Project> {
     const [c] = this.args;
@@ -47,9 +57,17 @@ export class CreateProject extends D1CreateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Get Project
+ *
+ * Retrieves a specific project by its slug.
+ */
 export class GetProject extends D1ReadEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = projectMeta;
+  public static _meta = {
+    summary: "Get a specific Project",
+    description: "Retrieves a single project by its slug from the registry",
+    ...projectMeta,
+  };
 
   // Override to fix Chanfana bug with empty filters
   async fetch(filters: any) {
@@ -72,11 +90,18 @@ export class GetProject extends D1ReadEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Update Project
+ *
+ * Updates an existing project's properties.
+ * Allows for partial updates and ensures that the user has access to both the
+ * old and new organization if the organization is being changed.
+ */
 export class UpdateProject extends D1UpdateEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "Update an existing Project",
+    description: "Updates a project in the registry",
     ...projectMeta,
-    // Allow partial updates by making fields optional
     fields: ProjectSchema.pick({
       name: true,
       description: true,
@@ -128,9 +153,19 @@ export class UpdateProject extends D1UpdateEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## Delete Project
+ *
+ * Deletes a project from the registry.
+ * It ensures that the user has access to the organization the project belongs to
+ * before allowing deletion.
+ */
 export class DeleteProject extends D1DeleteEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = projectMeta;
+  public static _meta = {
+    summary: "Delete a Project",
+    description: "Deletes a project from the registry",
+    ...projectMeta,
+  };
 
   async before(data: any, filters: any): Promise<any> {
     const [c] = this.args;
@@ -171,9 +206,17 @@ export class DeleteProject extends D1DeleteEndpoint<HandleArgs> {
   }
 }
 
+/**
+ * ## List Projects
+ *
+ * Retrieves a list of all projects.
+ * Supports filtering by name, slug, and organization, as well as searching and
+ * ordering.
+ */
 export class ListProjects extends D1ListEndpoint<HandleArgs> {
-  //@ts-expect-error
-  _meta = {
+  public static _meta = {
+    summary: "List all Projects",
+    description: "Retrieves a list of all projects in the registry",
     ...projectMeta,
   };
   filterFields = ["name", "slug", "organization"];

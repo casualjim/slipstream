@@ -76,49 +76,79 @@ const isoDate = z.string().trim().refine((val) => !isNaN(Date.parse(val)), { mes
  * Organization entity schema
  */
 export const OrganizationSchema = z.object({
-  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
-  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
-  description: z.string().optional(),
-  createdAt: isoDate,
-  updatedAt: isoDate,
+  slug: z
+    .string()
+    .trim()
+    .regex(SLUG_REGEX, SLUG_ERROR)
+    .describe(
+      "A unique identifier for the organization, used in URLs. It must be at least 3 characters long and can only contain alphanumeric characters and hyphens.",
+    ),
+  name: z
+    .string()
+    .trim()
+    .regex(NAME_REGEX, NAME_ERROR)
+    .describe(
+      "The full name of the organization. It must be at least 3 characters long and can contain alphanumeric characters and spaces.",
+    ),
+  description: z.string().describe("A brief description of the organization.").optional(),
+  createdAt: isoDate.describe("The date and time when the organization was created, in ISO 8601 format."),
+  updatedAt: isoDate.describe("The date and time when the organization was last updated, in ISO 8601 format."),
 });
 
 /**
  * Project entity schema
  */
 export const ProjectSchema = z.object({
-  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
-  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
-  description: z.string().nullish(),
-  organization: z.string().trim().min(1),
-  createdAt: isoDate,
-  updatedAt: isoDate,
+  slug: z
+    .string()
+    .trim()
+    .regex(SLUG_REGEX, SLUG_ERROR)
+    .describe(
+      "A unique identifier for the project, used in URLs. It must be at least 3 characters long and can only contain alphanumeric characters and hyphens.",
+    ),
+  name: z
+    .string()
+    .trim()
+    .regex(NAME_REGEX, NAME_ERROR)
+    .describe(
+      "The full name of the project. It must be at least 3 characters long and can contain alphanumeric characters and spaces.",
+    ),
+  description: z.string().nullish().describe("A brief description of the project."),
+  organization: z.string().trim().min(1).describe("The slug of the organization this project belongs to."),
+  createdAt: isoDate.describe("The date and time when the project was created, in ISO 8601 format."),
+  updatedAt: isoDate.describe("The date and time when the project was last updated, in ISO 8601 format."),
 });
 
 /**
  * User entity schema
  */
 export const UserSchema = z.object({
-  id: z.string().trim().min(1),
-  name: z.string().trim().min(1),
-  email: z.string().trim().min(1),
-  organizations: jsonArray,
-  createdAt: isoDate,
-  updatedAt: isoDate,
+  id: z.string().trim().min(1).describe("A unique identifier for the user."),
+  name: z.string().trim().min(1).describe("The full name of the user."),
+  email: z.string().trim().min(1).describe("The user's email address."),
+  organizations: jsonArray.describe("A list of organization slugs that the user belongs to."),
+  createdAt: isoDate.describe("The date and time when the user was created, in ISO 8601 format."),
+  updatedAt: isoDate.describe("The date and time when the user was last updated, in ISO 8601 format."),
 });
 
 /**
  * Tool entity schema
  */
 export const ToolSchema = z.object({
-  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
-  version: semverSchema,
-  provider: z.nativeEnum(ToolProvider),
-  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
-  description: z.string().nullish(),
-  arguments: z.record(z.unknown()).nullish(), // JSON Schema object
-  createdAt: isoDate,
-  updatedAt: isoDate,
+  slug: z
+    .string()
+    .trim()
+    .regex(SLUG_REGEX, SLUG_ERROR)
+    .describe(
+      "A unique identifier for the tool, used in URLs. It must be at least 3 characters long and can only contain alphanumeric characters and hyphens.",
+    ),
+  version: semverSchema.describe("The semantic version of the tool (e.g., 1.0.0)."),
+  provider: z.nativeEnum(ToolProvider).describe("The provider of the tool, indicating where it is executed."),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).describe("The display name of the tool."),
+  description: z.string().nullish().describe("A brief description of what the tool does."),
+  arguments: z.record(z.unknown()).nullish().describe("The JSON schema for the tool's arguments."), // JSON Schema object
+  createdAt: isoDate.describe("The date and time when the tool was created, in ISO 8601 format."),
+  updatedAt: isoDate.describe("The date and time when the tool was last updated, in ISO 8601 format."),
 });
 
 /**
@@ -146,39 +176,45 @@ export const UpdateToolSchema = z.object({
  * Model provider entity schema
  */
 export const ModelProviderSchema = z.object({
-  id: z.string().trim().min(1),
-  name: z.string().trim().min(1),
-  provider: z.nativeEnum(Provider),
-  description: z.string().nullish(),
-  contextSize: z.number(),
-  maxTokens: z.number().nullish(),
-  temperature: z.number().nullish(),
-  topP: z.number().nullish(),
-  frequencyPenalty: z.number().nullish(),
-  presencePenalty: z.number().nullish(),
-  capabilities: jsonArray, // Array of ModelCapabilities
-  inputModalities: jsonArray, // Array of Modalities
-  outputModalities: jsonArray, // Array of Modalities
-  dialect: z.nativeEnum(APIDialect).nullish(),
+  id: z.string().trim().min(1).describe("A unique identifier for the model provider."),
+  name: z.string().trim().min(1).describe("The display name of the model provider."),
+  provider: z.nativeEnum(Provider).describe("The name of the provider (e.g., OpenAI, Anthropic)."),
+  description: z.string().nullish().describe("A brief description of the model provider."),
+  contextSize: z.number().describe("The maximum number of tokens that can be processed in a single request."),
+  maxTokens: z.number().nullish().describe("The maximum number of tokens that can be generated in a single response."),
+  temperature: z.number().nullish().describe("Controls randomness in the generation process. Higher values mean more randomness."),
+  topP: z.number().nullish().describe("Controls diversity via nucleus sampling. A lower value means less diversity."),
+  frequencyPenalty: z.number().nullish().describe("Penalizes new tokens based on their existing frequency in the text so far."),
+  presencePenalty: z.number().nullish().describe("Penalizes new tokens based on whether they appear in the text so far."),
+  capabilities: jsonArray.describe("A list of the model's capabilities, such as chat, completion, or function calling."), // Array of ModelCapabilities
+  inputModalities: jsonArray.describe("A list of the modalities the model can accept as input (e.g., text, image, video)."), // Array of Modalities
+  outputModalities: jsonArray.describe("A list of the modalities the model can generate as output (e.g., text, image, video)."), // Array of Modalities
+  dialect: z.nativeEnum(APIDialect).nullish().describe("The API dialect used by the model provider (e.g., openai, anthropic)."),
 });
 
 /**
  * Agent entity schema
  */
 export const AgentSchema = z.object({
-  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR),
-  version: semverSchema,
-  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
-  description: z.string().nullish(),
-  model: z.string().trim().min(1),
-  instructions: z.string().trim().min(1),
-  availableTools: jsonArray.nullish(),
-  organization: z.string().trim().min(1),
-  project: z.string().trim().min(1),
-  createdBy: z.string().trim().min(1),
-  updatedBy: z.string().trim().min(1),
-  createdAt: isoDate,
-  updatedAt: isoDate,
+  slug: z
+    .string()
+    .trim()
+    .regex(SLUG_REGEX, SLUG_ERROR)
+    .describe(
+      "A unique identifier for the agent, used in URLs. It must be at least 3 characters long and can only contain alphanumeric characters and hyphens.",
+    ),
+  version: semverSchema.describe("The semantic version of the agent (e.g., 1.0.0)."),
+  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).describe("The display name of the agent."),
+  description: z.string().nullish().describe("A brief description of what the agent does."),
+  model: z.string().trim().min(1).describe("The identifier of the model used by the agent."),
+  instructions: z.string().trim().min(1).describe("The system instructions or prompt for the agent."),
+  availableTools: jsonArray.nullish().describe("A list of tools available to the agent, identified by slug and version."),
+  organization: z.string().trim().min(1).describe("The slug of the organization this agent belongs to."),
+  project: z.string().trim().min(1).describe("The slug of the project this agent belongs to."),
+  createdBy: z.string().trim().min(1).describe("The ID of the user who created the agent."),
+  updatedBy: z.string().trim().min(1).describe("The ID of the user who last updated the agent."),
+  createdAt: isoDate.describe("The date and time when the agent was created, in ISO 8601 format."),
+  updatedAt: isoDate.describe("The date and time when the agent was last updated, in ISO 8601 format."),
 });
 
 // Re-export schemas for easier imports

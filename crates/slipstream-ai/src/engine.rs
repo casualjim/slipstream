@@ -51,4 +51,14 @@ impl Engine {
       }
     }
   }
+
+  pub fn register_agent(&self, agent: AgentDefinition) -> Result<()> {
+    // TODO: Implement agent registration logic
+    unimplemented!("Implement agent registration logic, needs to be idempotent")
+  }
+
+  pub fn register_tool(&self, tool: ToolDefinition) -> Result<()> {
+    // TODO: Implement agent registration logic
+    unimplemented!("Implement agent registration logic, needs to be idempotent")
+  }
 }
