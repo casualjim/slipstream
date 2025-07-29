@@ -62,7 +62,8 @@ const toolMeta = {
  * It properly handles JSON serialization for the arguments field.
  */
 export class CreateTool extends D1CreateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Create a new Tool",
     description: "Creates a new tool in the registry",
     ...toolMeta,
@@ -102,7 +103,8 @@ export class CreateTool extends D1CreateEndpoint<HandleArgs> {
  * This endpoint handles composite primary keys to fetch the correct tool.
  */
 export class GetTool extends D1ReadEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Get a specific Tool",
     description: "Retrieves a single tool by its provider, slug, and version from the registry",
     ...toolMeta,
@@ -137,7 +139,8 @@ export class GetTool extends D1ReadEndpoint<HandleArgs> {
  * and arguments.
  */
 export class UpdateTool extends D1UpdateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Update an existing Tool",
     description: "Updates a tool in the registry",
     ...toolMeta,
@@ -174,7 +177,8 @@ export class UpdateTool extends D1UpdateEndpoint<HandleArgs> {
  * Deletes a specific version of a tool from the registry.
  */
 export class DeleteTool extends D1DeleteEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Delete a Tool",
     description: "Deletes a tool from the registry",
     ...toolMeta,
@@ -189,7 +193,8 @@ export class DeleteTool extends D1DeleteEndpoint<HandleArgs> {
  * searching and ordering.
  */
 export class ListTools extends D1ListEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "List all Tools",
     description: "Retrieves a list of all tools in the registry",
     ...toolMeta,

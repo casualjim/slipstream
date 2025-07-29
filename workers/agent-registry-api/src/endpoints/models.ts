@@ -59,7 +59,8 @@ const modelMeta = {
  * a way to look up their details.
  */
 export class GetModel extends D1ReadEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Get a specific Model",
     description: "Retrieves a single model by its ID from the registry",
     ...modelMeta,
@@ -90,7 +91,8 @@ export class GetModel extends D1ReadEndpoint<HandleArgs> {
  * description, and ordering. Models are read-only and seeded from migrations.
  */
 export class ListModels extends D1ListEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "List all Models",
     description: "Retrieves a list of all models in the registry",
     ...modelMeta,

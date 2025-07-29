@@ -41,7 +41,8 @@ const readOnlyMeta = {
  * distinct identifier.
  */
 export class CreateOrganization extends D1CreateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Create a new Organization",
     description: "Creates a new organization in the registry",
     ...orgMeta,
@@ -67,7 +68,8 @@ export class CreateOrganization extends D1CreateEndpoint<HandleArgs> {
  * Retrieves a specific organization by its slug.
  */
 export class GetOrganization extends D1ReadEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Get a specific Organization",
     description: "Retrieves a single organization by its slug from the registry",
     ...readOnlyMeta,
@@ -101,7 +103,8 @@ export class GetOrganization extends D1ReadEndpoint<HandleArgs> {
  * Authentication is handled by middleware.
  */
 export class UpdateOrganization extends D1UpdateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Update an existing Organization",
     description: "Updates an organization in the registry",
     ...orgMeta,
@@ -116,7 +119,8 @@ export class UpdateOrganization extends D1UpdateEndpoint<HandleArgs> {
  * It prevents deletion if the organization still has associated projects.
  */
 export class DeleteOrganization extends D1DeleteEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Delete an Organization",
     description: "Deletes an organization from the registry",
     ...orgMeta,
@@ -148,7 +152,8 @@ export class DeleteOrganization extends D1DeleteEndpoint<HandleArgs> {
  * Supports filtering, searching, and ordering.
  */
 export class ListOrganizations extends D1ListEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "List all Organizations",
     description: "Retrieves a list of all organizations in the registry",
     ...readOnlyMeta,

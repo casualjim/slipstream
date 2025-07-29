@@ -50,7 +50,8 @@ const agentMeta = {
  * specified organization.
  */
 export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Create a new Agent",
     description: "Creates a new agent in the registry",
     ...agentMeta,
@@ -137,7 +138,8 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
  * This endpoint handles composite primary keys to fetch the correct agent.
  */
 export class GetAgent extends D1ReadEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Get a specific Agent",
     description: "Retrieves a single agent by its slug and version from the registry",
     ...agentMeta,
@@ -183,7 +185,8 @@ export class GetAgent extends D1ReadEndpoint<HandleArgs> {
  * and ensures that any updated model or tool IDs are valid.
  */
 export class UpdateAgent extends D1UpdateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Update an existing Agent",
     description: "Updates an agent in the registry",
     ...agentMeta,
@@ -247,7 +250,8 @@ export class UpdateAgent extends D1UpdateEndpoint<HandleArgs> {
  * by checking their access to the associated organization.
  */
 export class DeleteAgent extends D1DeleteEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Delete an Agent",
     description: "Deletes an agent from the registry",
     ...agentMeta,
@@ -274,7 +278,8 @@ export class DeleteAgent extends D1DeleteEndpoint<HandleArgs> {
  * searching by name and description. The results are ordered and paginated.
  */
 export class ListAgents extends D1ListEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "List all Agents",
     description: "Retrieves a list of all agents in the registry",
     ...agentMeta,

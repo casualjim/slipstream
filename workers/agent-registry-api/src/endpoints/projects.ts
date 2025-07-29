@@ -29,7 +29,8 @@ const projectMeta = {
  * ensures that the project slug is unique.
  */
 export class CreateProject extends D1CreateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Create a new Project",
     description: "Creates a new project in the registry",
     ...projectMeta,
@@ -63,7 +64,8 @@ export class CreateProject extends D1CreateEndpoint<HandleArgs> {
  * Retrieves a specific project by its slug.
  */
 export class GetProject extends D1ReadEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Get a specific Project",
     description: "Retrieves a single project by its slug from the registry",
     ...projectMeta,
@@ -98,7 +100,8 @@ export class GetProject extends D1ReadEndpoint<HandleArgs> {
  * old and new organization if the organization is being changed.
  */
 export class UpdateProject extends D1UpdateEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Update an existing Project",
     description: "Updates a project in the registry",
     ...projectMeta,
@@ -161,7 +164,8 @@ export class UpdateProject extends D1UpdateEndpoint<HandleArgs> {
  * before allowing deletion.
  */
 export class DeleteProject extends D1DeleteEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "Delete a Project",
     description: "Deletes a project from the registry",
     ...projectMeta,
@@ -214,7 +218,8 @@ export class DeleteProject extends D1DeleteEndpoint<HandleArgs> {
  * ordering.
  */
 export class ListProjects extends D1ListEndpoint<HandleArgs> {
-  public static _meta = {
+  // @ts-expect-error - chanfana has poor type definitions
+_meta = {
     summary: "List all Projects",
     description: "Retrieves a list of all projects in the registry",
     ...projectMeta,
