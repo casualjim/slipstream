@@ -267,7 +267,7 @@ impl Registry for HttpAgentRegistry {
             format!("Reqwest JSON error: {e}"),
           ))
         })?;
-      Ok(envelope.result.into_iter().next())
+      Ok(Some(envelope.result))
     } else if response.status() == reqwest::StatusCode::NOT_FOUND {
       Ok(None)
     } else {
@@ -331,7 +331,7 @@ impl Registry for HttpAgentRegistry {
       ))
     })?;
     let envelope = response
-      .json::<APIEnvelope<AgentDefinition>>()
+      .json::<APIEnvelope<Vec<AgentDefinition>>>()
       .await
       .map_err(|e| {
         crate::Error::Io(std::io::Error::new(
@@ -379,16 +379,21 @@ mod tests {
     let registry = create_registry();
 
     // Test get with a non-existent agent (should return None)
-    let result = registry.get("non-existent-agent".to_string()).await;
-    if result.is_ok() {
-      assert!(result.unwrap().is_none());
-    }
+    let agent = registry
+      .get("non-existent-agent/1.0.0".to_string())
+      .await
+      .expect("Registry should be accessible for integration test");
+    assert!(agent.is_none(), "Non-existent agent should return None");
 
-    // Optionally, test get with a known agent if you have seed data
-    // let result = registry.get("some-known-agent".to_string()).await;
-    // if let Ok(Some(agent)) = result {
-    //     assert_eq!(agent.slug, "some-known-agent");
-    // }
+    // Test with invalid format (should return error)
+    let result = registry.get("invalid-format".to_string()).await;
+    assert!(result.is_err(), "Invalid format should return error");
+    assert!(
+      result
+        .unwrap_err()
+        .to_string()
+        .contains("Agent name must be in format 'slug/version'")
+    );
   }
 
   #[tokio::test]
@@ -398,16 +403,21 @@ mod tests {
     let registry = create_registry();
 
     // Test has with a non-existent agent (should return false)
-    let result = registry.has("non-existent-agent".to_string()).await;
-    if result.is_ok() {
-      assert_eq!(result.unwrap(), false);
-    }
+    let exists = registry
+      .has("non-existent-agent/1.0.0".to_string())
+      .await
+      .expect("Registry should be accessible for integration test");
+    assert_eq!(exists, false, "Non-existent agent should return false");
 
-    // Optionally, test has with a known agent if you have seed data
-    // let result = registry.has("some-known-agent".to_string()).await;
-    // if result.is_ok() {
-    //     assert_eq!(result.unwrap(), true);
-    // }
+    // Test with invalid format (should return error)
+    let result = registry.has("invalid-format".to_string()).await;
+    assert!(result.is_err(), "Invalid format should return error");
+    assert!(
+      result
+        .unwrap_err()
+        .to_string()
+        .contains("Agent name must be in format 'slug/version'")
+    );
   }
 
   #[tokio::test]
@@ -417,56 +427,76 @@ mod tests {
     let registry = create_registry();
 
     // Test keys (no pagination)
-    let result = registry
+    let keys = registry
       .keys(Pagination {
         page: None,
         per_page: None,
       })
-      .await;
+      .await
+      .expect("Registry should be accessible for integration test");
 
-    if let Ok(keys) = result {
-      // Optionally, check for known agents if you have seed data
-      // let expected_agents = vec!["agent1", "agent2"];
-      // for expected_agent in expected_agents {
-      //     assert!(keys.contains(&expected_agent.to_string()));
-      // }
-      assert!(keys.is_empty() || !keys.is_empty()); // Always true, just to exercise the code
-    }
+    // Keys should be a valid Vec (could be empty if no agents exist)
+    assert!(
+      keys.iter().all(|key| !key.is_empty()),
+      "All keys should be non-empty strings"
+    );
   }
 
   #[tokio::test]
-  async fn test_http_agent_registry_put_not_supported() {
+  async fn test_http_agent_registry_put_create() {
     let registry = create_registry();
-    let agent = create_test_agent("test-agent");
+    let agent = create_test_agent("test-agent-create");
 
-    let result = registry.put("test-agent/1.0.0".to_string(), agent).await;
-    // This should now work (though it may fail due to network/auth issues in tests)
-    // We can't easily test the success case without a running server
-    if result.is_err() {
-      // Check that it's not the old "not supported" error
+    // Test with invalid format first
+    let result = registry
+      .put("invalid-format".to_string(), agent.clone())
+      .await;
+    assert!(result.is_err(), "Invalid format should return error");
+    assert!(
+      result
+        .unwrap_err()
+        .to_string()
+        .contains("Agent name must be in format 'slug/version'")
+    );
+
+    // Test with proper format - this may succeed or fail depending on service state
+    // but should not return the old "not supported" error
+    let result = registry
+      .put("test-agent-create/1.0.0".to_string(), agent)
+      .await;
+    if let Err(e) = result {
+      let error_msg = e.to_string();
       assert!(
-        !result
-          .unwrap_err()
-          .to_string()
-          .contains("does not support put operations")
+        !error_msg.contains("does not support put operations"),
+        "Should not return old 'not supported' error, got: {}",
+        error_msg
       );
     }
   }
 
   #[tokio::test]
-  async fn test_http_agent_registry_del_not_supported() {
+  async fn test_http_agent_registry_del() {
     let registry = create_registry();
 
-    let result = registry.del("test-agent/1.0.0".to_string()).await;
-    // This should now work (though it may fail due to network/auth issues in tests)
-    // We can't easily test the success case without a running server
-    if result.is_err() {
-      // Check that it's not the old "not supported" error
+    // Test with invalid format first
+    let result = registry.del("invalid-format".to_string()).await;
+    assert!(result.is_err(), "Invalid format should return error");
+    assert!(
+      result
+        .unwrap_err()
+        .to_string()
+        .contains("Agent name must be in format 'slug/version'")
+    );
+
+    // Test with proper format - this may succeed or fail depending on service state
+    // but should not return the old "not supported" error
+    let result = registry.del("test-agent-del/1.0.0".to_string()).await;
+    if let Err(e) = result {
+      let error_msg = e.to_string();
       assert!(
-        !result
-          .unwrap_err()
-          .to_string()
-          .contains("does not support delete operations")
+        !error_msg.contains("does not support delete operations"),
+        "Should not return old 'not supported' error, got: {}",
+        error_msg
       );
     }
   }
@@ -549,51 +579,51 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn test_http_agent_registry_read_operations() {
+  async fn test_http_agent_registry_crud_lifecycle() {
     let registry = create_registry();
+    let agent_name = "test-lifecycle-agent/1.0.0";
+    let agent = create_test_agent("test-lifecycle-agent");
 
-    // Test that put operation returns an error
-    let agent = create_test_agent("test-agent");
-    let put_result = registry
-      .put("test-agent/1.0.0".to_string(), agent.clone())
-      .await;
-    // This should now work (though it may fail due to network/auth issues in tests)
-    // We can't easily test the success case without a running server
-    if put_result.is_err() {
-      // Check that it's not the old "not supported" error
+    // Clean up any existing agent first (ignore errors)
+    let _ = registry.del(agent_name.to_string()).await;
+
+    // Verify agent doesn't exist
+    let exists = registry
+      .has(agent_name.to_string())
+      .await
+      .expect("Registry should be accessible");
+    assert!(!exists, "Agent should not exist initially");
+
+    // Try to get non-existent agent
+    let get_result = registry
+      .get(agent_name.to_string())
+      .await
+      .expect("Registry should be accessible");
+    assert!(
+      get_result.is_none(),
+      "Non-existent agent should return None"
+    );
+
+    // Create agent (may fail due to auth/network, but should not be "not supported")
+    let put_result = registry.put(agent_name.to_string(), agent).await;
+    if let Err(e) = put_result {
+      let error_msg = e.to_string();
       assert!(
-        !put_result
-          .unwrap_err()
-          .to_string()
-          .contains("does not support put operations")
+        !error_msg.contains("does not support put operations"),
+        "Should not return old 'not supported' error, got: {}",
+        error_msg
       );
     }
 
-    // Test that del operation returns an error
-    let del_result = registry.del("test-agent/1.0.0".to_string()).await;
-    // This should now work (though it may fail due to network/auth issues in tests)
-    // We can't easily test the success case without a running server
-    if del_result.is_err() {
-      // Check that it's not the old "not supported" error
+    // Clean up (may fail due to auth/network, but should not be "not supported")
+    let del_result = registry.del(agent_name.to_string()).await;
+    if let Err(e) = del_result {
+      let error_msg = e.to_string();
       assert!(
-        !del_result
-          .unwrap_err()
-          .to_string()
-          .contains("does not support delete operations")
+        !error_msg.contains("does not support delete operations"),
+        "Should not return old 'not supported' error, got: {}",
+        error_msg
       );
     }
-  }
-
-  #[test]
-  fn test_http_agent_registry_with_base_url() {
-    // Create registry with a dummy URL and API key for testing the structure
-    let registry = HttpAgentRegistry::new(
-      "http://localhost:3000".to_string(),
-      SecretString::new("dummy-key".to_string().into()),
-    )
-    .expect("Failed to create registry");
-
-    // Verify the registry was created correctly
-    assert_eq!(registry.base_url, "http://localhost:3000");
   }
 }

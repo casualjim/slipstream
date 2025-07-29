@@ -103,11 +103,11 @@ pub enum ToolProvider {
 impl AsRef<str> for ToolProvider {
   fn as_ref(&self) -> &str {
     match self {
-      ToolProvider::Client => "client",
-      ToolProvider::Local => "local",
-      ToolProvider::MCP => "mcp",
-      ToolProvider::Restate => "restate",
-      ToolProvider::Unknown => "unknown",
+      ToolProvider::Client => "Client",
+      ToolProvider::Local => "Local",
+      ToolProvider::MCP => "MCP",
+      ToolProvider::Restate => "Restate",
+      ToolProvider::Unknown => "Unknown",
     }
   }
 }
@@ -141,11 +141,11 @@ impl AsRef<[u8]> for ToolProvider {
 impl std::fmt::Display for ToolProvider {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      ToolProvider::Client => write!(f, "client"),
-      ToolProvider::Local => write!(f, "local"),
-      ToolProvider::MCP => write!(f, "mcp"),
-      ToolProvider::Restate => write!(f, "restate"),
-      ToolProvider::Unknown => write!(f, "unknown"),
+      ToolProvider::Client => write!(f, "Client"),
+      ToolProvider::Local => write!(f, "Local"),
+      ToolProvider::MCP => write!(f, "MCP"),
+      ToolProvider::Restate => write!(f, "Restate"),
+      ToolProvider::Unknown => write!(f, "Unknown"),
     }
   }
 }
@@ -158,6 +158,10 @@ pub struct ToolDefinition {
   pub version: String,
   pub arguments: Option<schemars::Schema>,
   pub provider: ToolProvider,
+  #[serde(skip_serializing_if = "Option::is_none", alias = "createdAt")]
+  pub created_at: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none", alias = "updatedAt")]
+  pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

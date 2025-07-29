@@ -256,13 +256,16 @@ impl Registry for HttpToolRegistry {
     })?;
 
     if response.status().is_success() {
-      let tool = response.json::<ToolDefinition>().await.map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("Reqwest JSON error: {e}"),
-        ))
-      })?;
-      Ok(Some(tool))
+      let envelope = response
+        .json::<APIEnvelope<ToolDefinition>>()
+        .await
+        .map_err(|e| {
+          crate::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Reqwest JSON error: {e}"),
+          ))
+        })?;
+      Ok(Some(envelope.result))
     } else if response.status() == reqwest::StatusCode::NOT_FOUND {
       Ok(None)
     } else {
@@ -333,7 +336,7 @@ impl Registry for HttpToolRegistry {
       })?;
 
     let envelope = response
-      .json::<APIEnvelope<ToolDefinition>>()
+      .json::<APIEnvelope<Vec<ToolDefinition>>>()
       .await
       .map_err(|e| {
         crate::Error::Io(std::io::Error::new(
@@ -372,6 +375,8 @@ mod tests {
       version: "1.0.0".to_string(),
       arguments: Some(schema_for!(bool)),
       provider: ToolProvider::Local,
+      created_at: None,
+      updated_at: None,
     }
   }
 
@@ -392,10 +397,11 @@ mod tests {
     let registry = create_registry();
     let tool_ref = create_test_tool_ref("non-existent");
 
-    let result = registry.get(tool_ref).await;
-    if result.is_ok() {
-      assert!(result.unwrap().is_none());
-    }
+    let result = registry
+      .get(tool_ref)
+      .await
+      .expect("Registry should be accessible");
+    assert!(result.is_none());
   }
 
   #[tokio::test]
@@ -403,64 +409,134 @@ mod tests {
     let registry = create_registry();
     let tool_ref = create_test_tool_ref("non-existent");
 
-    let result = registry.has(tool_ref).await;
-    if result.is_ok() {
-      assert_eq!(result.unwrap(), false);
-    }
-  }
-
-  #[tokio::test]
-  async fn test_http_tool_registry_keys() {
-    let registry = create_registry();
-
     let result = registry
-      .keys(Pagination {
-        page: None,
-        per_page: None,
-      })
-      .await;
-
-    if let Ok(keys) = result {
-      assert!(keys.is_empty() || !keys.is_empty());
-    }
+      .has(tool_ref)
+      .await
+      .expect("Registry should be accessible");
+    assert_eq!(result, false);
   }
 
   #[tokio::test]
-  async fn test_http_tool_registry_put() {
+  async fn test_version_validation_on_operations() {
     let registry = create_registry();
-    let tool = create_test_tool("test-tool");
-    let tool_ref = create_test_tool_ref("test-tool");
-
-    let result = registry.put(tool_ref, tool).await;
-    // This may fail due to network/auth issues in tests
-    if result.is_err() {
-      let error_msg = result.unwrap_err().to_string();
-      assert!(!error_msg.contains("does not support put operations"));
-    }
-  }
-
-  #[tokio::test]
-  async fn test_http_tool_registry_del() {
-    let registry = create_registry();
-    let tool_ref = create_test_tool_ref("test-tool");
-
-    let result = registry.del(tool_ref).await;
-    // This may fail due to network/auth issues in tests
-    if result.is_err() {
-      let error_msg = result.unwrap_err().to_string();
-      assert!(!error_msg.contains("does not support delete operations"));
-    }
-  }
-
-  #[test]
-  fn test_tool_ref_requires_version() {
-    let tool_ref = ToolRef {
+    let tool_ref_no_version = ToolRef {
       provider: ToolProvider::Local,
-      slug: "test-tool".to_string(),
+      slug: "test".to_string(),
       version: None,
     };
 
-    // This should be caught by the registry methods
-    assert!(tool_ref.version.is_none());
+    // These should fail with specific validation errors
+    let get_result = registry.get(tool_ref_no_version.clone()).await;
+    assert!(
+      matches!(get_result, Err(crate::Error::Validation { field, .. }) if field == "version")
+    );
+
+    let has_result = registry.has(tool_ref_no_version.clone()).await;
+    assert!(
+      matches!(has_result, Err(crate::Error::Validation { field, .. }) if field == "version")
+    );
+
+    let tool = create_test_tool("test");
+    let put_result = registry.put(tool_ref_no_version.clone(), tool).await;
+    assert!(
+      matches!(put_result, Err(crate::Error::Validation { field, .. }) if field == "version")
+    );
+
+    let del_result = registry.del(tool_ref_no_version).await;
+    assert!(
+      matches!(del_result, Err(crate::Error::Validation { field, .. }) if field == "version")
+    );
+  }
+
+  #[tokio::test]
+  async fn test_validation_error_messages() {
+    let registry = create_registry();
+    let tool_ref_no_version = ToolRef {
+      provider: ToolProvider::Local,
+      slug: "test".to_string(),
+      version: None,
+    };
+
+    let get_result = registry.get(tool_ref_no_version).await;
+    match get_result {
+      Err(crate::Error::Validation { field, reason }) => {
+        assert_eq!(field, "version");
+        assert_eq!(reason, "Tool version is required");
+      }
+      _ => panic!("Expected validation error for missing version"),
+    }
+  }
+
+  #[tokio::test]
+  async fn test_url_encoding_edge_cases() {
+    let registry = create_registry();
+
+    // Test slugs and versions with special characters that need URL encoding
+    let tool_ref = ToolRef {
+      provider: ToolProvider::Local,
+      slug: "tool-with-special/chars".to_string(),
+      version: Some("1.0.0-beta+build".to_string()),
+    };
+
+    // This would catch URL encoding bugs that cause 400s in production
+    let result = registry.get(tool_ref).await;
+    // Should either succeed or fail with proper HTTP error, not panic/crash
+    match result {
+      Ok(_) | Err(crate::Error::Registry { .. }) => {
+        // Both are acceptable - we're testing URL construction doesn't crash
+      }
+      Err(other) => {
+        // Network/auth errors are also acceptable in tests
+        assert!(matches!(other, crate::Error::Io(_)));
+      }
+    }
+  }
+
+  #[tokio::test]
+  async fn test_full_crud_lifecycle() {
+    let registry = create_registry();
+    let tool = create_test_tool("integration-test-tool");
+    let tool_ref = create_test_tool_ref("integration-test-tool");
+
+    // This test requires a running registry and proper cleanup
+    // 1. Clean up any existing tool first
+    let _ = registry.del(tool_ref.clone()).await;
+
+    // 2. Verify tool doesn't exist after cleanup
+    let initial_check = registry
+      .get(tool_ref.clone())
+      .await
+      .expect("Registry should be accessible");
+    assert!(initial_check.is_none());
+
+    // 3. Create tool
+    registry
+      .put(tool_ref.clone(), tool.clone())
+      .await
+      .expect("Should create tool");
+
+    // 4. Verify tool exists and matches
+    let retrieved = registry
+      .get(tool_ref.clone())
+      .await
+      .expect("Should retrieve tool");
+    assert!(retrieved.is_some());
+    let retrieved_tool = retrieved.unwrap();
+    assert_eq!(retrieved_tool.name, tool.name);
+    assert_eq!(retrieved_tool.description, tool.description);
+
+    // 5. Cleanup - delete tool
+    let deleted = registry
+      .del(tool_ref.clone())
+      .await
+      .expect("Should delete tool");
+    assert!(deleted.is_some());
+
+    // 6. Verify tool is gone
+    let final_check = registry
+      .get(tool_ref)
+      .await
+      .expect("Registry should be accessible");
+    assert!(final_check.is_none());
   }
 }

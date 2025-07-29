@@ -90,6 +90,8 @@ mod tests {
       version: "1.0.0".to_string(),
       arguments: Some(schema_for!(bool)),
       provider: ToolProvider::Local,
+      created_at: None,
+      updated_at: None,
     }
   }
 

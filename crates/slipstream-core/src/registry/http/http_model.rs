@@ -104,7 +104,7 @@ impl Registry for HttpModelRegistry {
             format!("Reqwest JSON error: {e}"),
           ))
         })?;
-      Ok(envelope.result.into_iter().next())
+      Ok(Some(envelope.result))
     } else if response.status() == reqwest::StatusCode::NOT_FOUND {
       Ok(None)
     } else {
@@ -157,7 +157,7 @@ impl Registry for HttpModelRegistry {
       })?;
 
     let envelope = response
-      .json::<APIEnvelope<ModelDefinition>>()
+      .json::<APIEnvelope<Vec<ModelDefinition>>>()
       .await
       .map_err(|e| {
         crate::Error::Io(std::io::Error::new(
@@ -165,6 +165,7 @@ impl Registry for HttpModelRegistry {
           format!("Reqwest JSON error: {e}"),
         ))
       })?;
+
     Ok(envelope.result.into_iter().map(|model| model.id).collect())
   }
 }
@@ -204,19 +205,20 @@ mod tests {
     let registry = create_registry();
 
     // Test get with a non-existent model (should return None)
-    let result = registry.get("non-existent-model".to_string()).await;
-    if result.is_ok() {
-      assert_eq!(result.unwrap(), None);
-    }
+    let result = registry
+      .get("non-existent-model".to_string())
+      .await
+      .expect("HTTP call should succeed");
+    assert_eq!(result, None);
 
     // Test get with a known model from seed data
     let result = registry
       .get("deepseek-ai/DeepSeek-R1-0528".to_string())
-      .await;
-    if let Ok(Some(model)) = result {
-      assert_eq!(model.id, "deepseek-ai/DeepSeek-R1-0528");
-      assert_eq!(model.name, "DeepSeek R1");
-    }
+      .await
+      .expect("HTTP call should succeed");
+    let model = result.expect("Model should exist in seed data");
+    assert_eq!(model.id, "deepseek-ai/DeepSeek-R1-0528");
+    assert_eq!(model.name, "DeepSeek R1");
   }
 
   #[tokio::test]
@@ -226,16 +228,18 @@ mod tests {
     let registry = create_registry();
 
     // Test has with a non-existent model (should return false)
-    let result = registry.has("non-existent-model".to_string()).await;
-    if result.is_ok() {
-      assert_eq!(result.unwrap(), false);
-    }
+    let result = registry
+      .has("non-existent-model".to_string())
+      .await
+      .expect("HTTP call should succeed");
+    assert_eq!(result, false);
 
     // Test has with a known model from seed data (should return true)
-    let result = registry.has("google/gemini-2.5-flash".to_string()).await;
-    if result.is_ok() {
-      assert_eq!(result.unwrap(), true);
-    }
+    let result = registry
+      .has("google/gemini-2.5-flash".to_string())
+      .await
+      .expect("HTTP call should succeed");
+    assert_eq!(result, true);
   }
 
   #[tokio::test]
@@ -318,23 +322,6 @@ mod tests {
     );
   }
 
-  #[test]
-  fn test_http_model_registry_new_with_invalid_api_key() {
-    // Test with invalid API key format (empty string)
-    let result = HttpModelRegistry::new(
-      "http://localhost:8080".to_string(),
-      SecretString::new("".to_string().into()),
-    );
-    assert!(result.is_ok()); // Constructor should succeed even with empty key
-
-    // Test with malformed base URL - this would fail at request time, not construction
-    let result = HttpModelRegistry::new(
-      "not-a-valid-url".to_string(),
-      SecretString::new("test-key".to_string().into()),
-    );
-    assert!(result.is_ok()); // Constructor validation is minimal
-  }
-
   #[tokio::test]
   async fn test_http_model_registry_read_operations() {
     let registry = create_registry();
@@ -359,18 +346,5 @@ mod tests {
         .to_string()
         .contains("does not support delete operations")
     );
-  }
-
-  #[test]
-  fn test_http_model_registry_with_base_url() {
-    // Create registry with a dummy URL and API key for testing the structure
-    let registry = HttpModelRegistry::new(
-      "http://localhost:3000".to_string(),
-      SecretString::new("dummy-key".to_string().into()),
-    )
-    .expect("Failed to create registry");
-
-    // Verify the registry was created correctly
-    assert_eq!(registry.base_url, "http://localhost:3000");
   }
 }

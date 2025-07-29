@@ -19,6 +19,6 @@ struct ResultInfo {
 #[derive(Debug, Serialize, Deserialize)]
 struct APIEnvelope<T> {
   pub success: bool,
-  pub result: Vec<T>,
+  pub result: T,
   pub result_info: Option<ResultInfo>,
 }
