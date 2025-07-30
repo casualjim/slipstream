@@ -1,8 +1,81 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use typed_builder::TypedBuilder;
 use validator::Validate;
+
+use crate::{EnumKind, Error};
+
+#[derive(
+  Debug,
+  Clone,
+  PartialEq,
+  Eq,
+  Hash,
+  Serialize,
+  Deserialize,
+  TypedBuilder,
+  Default
+)]
+pub struct AgentRef {
+  #[builder(setter(into))]
+  pub slug: String,
+  #[builder(setter(into))]
+  pub version: String,
+}
+
+impl Display for AgentRef {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}/{}", self.slug, self.version)
+  }
+}
+
+impl FromStr for AgentRef {
+  type Err = Error;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    let parts: Vec<&str> = s.split('/').collect();
+    if parts.len() != 2 {
+      Err(Error::InvalidRef {
+        kind: "agent",
+        reason: "expected format 'slug/version'",
+      })
+    } else {
+      Ok(AgentRef {
+        slug: parts[0].to_string(),
+        version: parts[1].to_string(),
+      })
+    }
+  }
+}
+
+impl From<AgentRef> for String {
+  fn from(agent_ref: AgentRef) -> Self {
+    agent_ref.to_string()
+  }
+}
+
+impl TryFrom<String> for AgentRef {
+  type Error = Error;
+
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    Self::from_str(&value)
+  }
+}
+
+impl From<&str> for AgentRef {
+  fn from(value: &str) -> Self {
+    value.parse().expect("Failed to parse AgentRef from str")
+  }
+}
+
+fn deserialize_tools<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+  D: Deserializer<'de>,
+{
+  let opt: Option<Vec<String>> = Option::deserialize(deserializer)?;
+  Ok(opt.unwrap_or_default())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TypedBuilder, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +95,7 @@ pub struct AgentDefinition {
   #[validate(length(min = 1, message = "Agent slug cannot be empty"))]
   pub slug: String,
   #[builder(default, setter(transform = |tools: impl IntoIterator<Item = impl Into<String>>| tools.into_iter().map(Into::into).collect()))]
+  #[serde(default, deserialize_with = "deserialize_tools")]
   pub available_tools: Vec<String>,
   #[builder(setter(into))]
   #[validate(length(min = 1, message = "Agent instructions cannot be empty"))]
@@ -34,15 +108,33 @@ pub struct AgentDefinition {
   pub project: String,
 }
 
+impl From<AgentDefinition> for AgentRef {
+  fn from(value: AgentDefinition) -> Self {
+    Self {
+      slug: value.slug.clone(),
+      version: value.version.clone(),
+    }
+  }
+}
+
+impl From<&AgentDefinition> for AgentRef {
+  fn from(value: &AgentDefinition) -> Self {
+    Self {
+      slug: value.slug.clone(),
+      version: value.version.clone(),
+    }
+  }
+}
+
 #[derive(
   Debug,
   Clone,
   PartialEq,
   Eq,
   Hash,
-  Serialize,
-  Deserialize,
-  TypedBuilder
+  TypedBuilder,
+  serde::Serialize,
+  serde::Deserialize
 )]
 #[serde(try_from = "String", into = "String")]
 pub struct ToolRef {
@@ -51,6 +143,36 @@ pub struct ToolRef {
   #[builder(default, setter(strip_option, into))]
   pub version: Option<String>,
   pub provider: ToolProvider,
+}
+
+// Custom validation for ToolRef to require version presence
+impl validator::Validate for ToolRef {
+  fn validate(&self) -> Result<(), validator::ValidationErrors> {
+    let mut errors = validator::ValidationErrors::new();
+
+    // Validate slug
+    if self.slug.len() < 3 {
+      let mut error = validator::ValidationError::new("length");
+      error.message = Some("Tool slug cannot be empty".into());
+      errors.add("slug", error);
+    }
+
+    // Validate version presence and length
+    match &self.version {
+      Some(v) if v.len() >= 1 => {}
+      _ => {
+        let mut error = validator::ValidationError::new("length");
+        error.message = Some("Tool version cannot be empty".into());
+        errors.add("version", error);
+      }
+    }
+
+    if errors.is_empty() {
+      Ok(())
+    } else {
+      Err(errors)
+    }
+  }
 }
 
 impl std::fmt::Display for ToolRef {
@@ -158,7 +280,7 @@ impl AsRef<str> for ToolProvider {
 }
 
 impl FromStr for ToolProvider {
-  type Err = String;
+  type Err = Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s {
@@ -166,7 +288,7 @@ impl FromStr for ToolProvider {
       "local" => Ok(ToolProvider::Local),
       "mcp" => Ok(ToolProvider::MCP),
       "restate" => Ok(ToolProvider::Restate),
-      _ => Err(format!("Invalid tool provider: {}", s)),
+      _ => Err(Error::Unknown(EnumKind::ToolProvider, s.to_string())),
     }
   }
 }
@@ -274,8 +396,58 @@ pub enum Provider {
   Google,
   #[serde(rename = "OpenRouter")]
   OpenRouter,
-  #[serde(other, skip_serializing)]
-  Unknown,
+}
+
+impl AsRef<str> for Provider {
+  fn as_ref(&self) -> &str {
+    match self {
+      Provider::OpenAI => "OpenAI",
+      Provider::Anthropic => "Anthropic",
+      Provider::DeepInfra => "DeepInfra",
+      Provider::Google => "Google",
+      Provider::OpenRouter => "OpenRouter",
+    }
+  }
+}
+
+impl std::str::FromStr for Provider {
+  type Err = Error;
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(match s.to_lowercase().as_str() {
+      "openai" => Provider::OpenAI,
+      "anthropic" => Provider::Anthropic,
+      "deepinfra" => Provider::DeepInfra,
+      "google" => Provider::Google,
+      "openrouter" => Provider::OpenRouter,
+      s => {
+        return Err(Error::Unknown(EnumKind::ModelProvider, s.to_string()));
+      }
+    })
+  }
+}
+
+impl AsRef<[u8]> for Provider {
+  fn as_ref(&self) -> &[u8] {
+    match self {
+      Provider::OpenAI => b"openai",
+      Provider::Anthropic => b"anthropic",
+      Provider::DeepInfra => b"deepinfra",
+      Provider::Google => b"google",
+      Provider::OpenRouter => b"openrouter",
+    }
+  }
+}
+
+impl std::fmt::Display for Provider {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Provider::OpenAI => write!(f, "OpenAI"),
+      Provider::Anthropic => write!(f, "Anthropic"),
+      Provider::DeepInfra => write!(f, "DeepInfra"),
+      Provider::Google => write!(f, "Google"),
+      Provider::OpenRouter => write!(f, "OpenRouter"),
+    }
+  }
 }
 
 #[derive(
@@ -336,7 +508,7 @@ impl ModelDefinition {
   ///
   /// ## Basic Usage
   /// ```rust
-  /// use slipstream_core::definitions::*;
+  /// use crate::*;
   ///
   /// let model = ModelDefinition::builder()
   ///     .id("gpt-4")
@@ -354,7 +526,7 @@ impl ModelDefinition {
   ///
   /// ## Using Convenience Constructors
   /// ```rust
-  /// use slipstream_core::definitions::*;
+  /// use crate::*;
   ///
   /// // Chat model with sensible defaults
   /// let chat_model = ModelDefinition::chat_model(
@@ -470,7 +642,7 @@ impl ToolRef {
   ///
   /// ## Using Builder
   /// ```rust
-  /// use slipstream_core::definitions::*;
+  /// use crate::*;
   ///
   /// let tool_ref = ToolRef::builder()
   ///     .slug("my-tool")
@@ -481,7 +653,7 @@ impl ToolRef {
   ///
   /// ## Using Convenience Constructors
   /// ```rust
-  /// use slipstream_core::definitions::*;
+  /// use crate::*;
   ///
   /// // Without version
   /// let tool1 = ToolRef::new(ToolProvider::Local, "calculator");

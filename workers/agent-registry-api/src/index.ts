@@ -45,7 +45,20 @@ app.onError((err, c) => {
 });
 
 // Apply auth middleware to all API routes
-app.use("/api/v1/*", bearerAuth);
+// app.use("/api/v1/*", bearerAuth);
+app.use("*", async (c, next) => {
+  const path = c.req.path;
+  // Exclude docs endpoints from auth
+  if (path.startsWith("/api/v1/apidocs")) {
+    return await next();
+  }
+  // Optionally exclude OpenAPI spec endpoint
+  if (path.startsWith("/api/v1/openapi")) {
+    return await next();
+  }
+  // Require auth for everything else
+  return await bearerAuth(c, next);
+});
 
 // Setup OpenAPI
 const openapi = fromHono(app, {
@@ -93,6 +106,30 @@ openapi.get("/agents/:slug/:version", GetAgent);
 openapi.put("/agents/:slug/:version", UpdateAgent);
 openapi.delete("/agents/:slug/:version", DeleteAgent);
 
+// Utility endpoints
+openapi.post("/utils/generate-slug", async (c) => {
+  const { name } = await c.req.json();
+  if (!name || typeof name !== "string") {
+    return c.json({ success: false, error: "Name is required" }, 400);
+  }
+
+  try {
+    const { generateSlug } = await import("./lib/utils");
+    const slug = generateSlug(name);
+    return c.json({ success: true, slug });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+// SSE events endpoint (server-sent events)
+app.get("/api/v1/events", bearerAuth, async (c) => {
+  // Open an SSE stream via the Durable Object
+  const id = c.env.EVENT_HUB.idFromName("global");
+  const stub = c.env.EVENT_HUB.get(id);
+  // GET /events on the DO
+  return stub.fetch("/events");
+});
 // Mount API
 app.route("/api/v1", openapi);
 
@@ -112,3 +149,7 @@ app.notFound((c) => {
 
 // Export the Hono app
 export default app;
+
+// Export Durable Object class for Wrangler
+import { EventHub } from "./lib/eventHub";
+export { EventHub };

@@ -6,6 +6,7 @@ use mockall::automock;
 use schemars::{JsonSchema, SchemaGenerator, generate::SchemaSettings};
 use serde::{Deserialize, Serialize};
 use slipstream_core::messages::{InstructionsMessage, ToolCallData};
+use slipstream_metadata::AgentRef;
 use tokio::runtime;
 use typed_builder::TypedBuilder;
 
@@ -177,6 +178,8 @@ impl Clone for AgentTool {
 #[automock]
 pub trait Agent: Debug + Send + Sync + 'static {
   fn name(&self) -> &str;
+  fn version(&self) -> &str;
+
   fn instructions(&self) -> InstructionsMessage;
   fn model(&self) -> &CompleterConfig;
   fn tools(&self) -> &[&'static AgentTool];
@@ -223,7 +226,8 @@ pub trait Agent: Debug + Send + Sync + 'static {
 
 #[derive(Debug, Default, TypedBuilder)]
 pub struct DefaultAgent {
-  name: String,
+  #[builder(setter(into))]
+  name: AgentRef,
   instructions: String,
   #[builder(default)]
   model: CompleterConfig,
@@ -235,7 +239,11 @@ pub struct DefaultAgent {
 
 impl Agent for DefaultAgent {
   fn name(&self) -> &str {
-    &self.name
+    &self.name.slug
+  }
+
+  fn version(&self) -> &str {
+    &self.name.version
   }
 
   fn instructions(&self) -> InstructionsMessage {
@@ -317,7 +325,7 @@ mod tests {
   #[tokio::test]
   async fn test_hello_agent() {
     let mut agent = DefaultAgent {
-      name: "hello".to_string(),
+      name: "hello/0.1.0".into(),
       instructions: "Say hello to the world".to_string(),
       model: CompleterConfig::builder()
         .model("gpt-4.1-mini".to_string())
@@ -344,13 +352,14 @@ mod tests {
     HELLO_AGENT_FUNCTION.get_or_init(|| AgentTool {
       name: "create_subagent".to_string(),
       description: "Creates a new agent".to_string(),
-      arguments: vec!["name".to_string()],
+      arguments: vec!["name".to_string(), "version".to_string()],
       schema: schemars::json_schema!(true),
       handler: Some(Box::new(wrap_agent_fn(
         |args: serde_json::Value| async move {
           let name = args["name"].as_str().unwrap_or("subagent");
+          let version = args["version"].as_str().unwrap_or("0.1.0");
           let agent = DefaultAgent::builder()
-            .name(name.to_string())
+            .name(AgentRef::builder().slug(name).version(version).build())
             .instructions("I am a subagent".to_string())
             .build();
           Ok(Arc::new(agent) as Arc<dyn Agent>)

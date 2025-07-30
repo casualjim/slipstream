@@ -2,13 +2,11 @@ use std::sync::Arc;
 
 use eyre::Result;
 use slipstream_ai::{
-  Agent, AgentRequest, CompleterConfig, DefaultAgent, Executor, Local, OpenAILikeCompleter,
-  ProviderConfig, StreamEvent,
+  Agent, AgentRequest, CompleterConfig, DefaultAgent, Engine, ExecutionContext, Executor, Local,
+  OpenAILikeCompleter, ProviderConfig, StreamEvent,
 };
-use slipstream_core::{
-  definitions::Provider,
-  messages::{Aggregator, Erasable, MessageBuilder},
-};
+use slipstream_core::messages::MessageBuilder;
+use slipstream_metadata::Provider;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -23,62 +21,73 @@ async fn main() -> Result<()> {
   let api_key =
     std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY environment variable must be set");
 
+  let engine = Engine::default();
+
   // Create provider config (equivalent to openai.GPT4oMini())
   let provider_config = ProviderConfig::builder()
     .name("openai".to_string())
     .api_key(api_key)
     .build();
 
-  // Create completer config (equivalent to openai.GPT4oMini())
-  let completer_config = CompleterConfig::builder()
-    .provider("openai".to_string())
-    .model("gpt-4.1-nano".to_string())
-    .temperature(0.2)
-    .build();
+  engine
+    .register_provider(Provider::OpenAI, provider_config.clone())
+    .await?;
+
+  // // Create completer config (equivalent to openai.GPT4oMini())
+  // let completer_config = CompleterConfig::builder()
+  //   .provider("openai".to_string())
+  //   .model("gpt-4.1-nano".to_string())
+  //   .temperature(0.2)
+  //   .build();
+
+  let (publisher, mut subscriber) = broadcast::channel::<StreamEvent>(1000);
+
+  let agent_ref = "minimal-agent/0.0.1";
 
   // Create the minimal agent (equivalent to Go's minimalAgent)
   let minimal_agent = Arc::new(
     DefaultAgent::builder()
-      .name("minimal-agent".to_string())
+      .name(agent_ref)
       .instructions("You are a helpful assistant".to_string())
-      .model(completer_config)
+      .model(
+        CompleterConfig::builder()
+          .provider("openai".to_string())
+          .model("gpt-4.1-nano".to_string())
+          .temperature(0.2)
+          .build(),
+      )
       .build(),
   ) as Arc<dyn Agent>;
 
   // Create the OpenAI completer
   let completer = Arc::new(OpenAILikeCompleter::new(&provider_config));
 
-  // Create the local executor (equivalent to bubo.Local())
-  let executor = Local::new().with_provider(Provider::OpenAI, completer);
+  let mut exec_context = ExecutionContext::new(publisher);
+  let turn_id = exec_context.session.id();
+  exec_context.register_agent(agent_ref.into(), minimal_agent);
+  exec_context.register_provider(Provider::OpenAI, completer);
 
   // Create a session aggregator and add the user message
-  let mut session = Aggregator::new();
   let user_message = MessageBuilder::new()
     .with_run_id(Uuid::now_v7())
-    .with_turn_id(session.id())
+    .with_turn_id(turn_id)
     .user_prompt(
       "What is the answer to the ultimate question of life, the universe, and everything?"
         .to_string(),
     );
-
-  session.add_message(user_message.erase());
-
-  // Create a broadcast channel for streaming events
-  let (sender, mut receiver) = broadcast::channel::<StreamEvent>(1000);
+  exec_context.session.add_user_prompt(user_message);
 
   // Create the agent request
   let request = AgentRequest::builder()
-    .agent(minimal_agent)
-    .session(session)
+    .agent(agent_ref)
     .stream(true)
-    .sender(sender)
     .build();
 
   // Spawn a task to handle streaming events (equivalent to msgfmt.Console)
   let stream_handle = tokio::spawn(async move {
     let mut final_result = String::new();
 
-    while let Ok(event) = receiver.recv().await {
+    while let Ok(event) = subscriber.recv().await {
       match event {
         StreamEvent::Delim(delim) => {
           tracing::debug!("Delimiter: {}", delim.delim);
@@ -119,7 +128,7 @@ async fn main() -> Result<()> {
   });
 
   // Execute the agent request (equivalent to p.Run())
-  match executor.execute(request).await {
+  match Local.execute::<String>(exec_context, request).await {
     Ok(result) => {
       tracing::info!("Agent execution completed successfully");
 
@@ -128,13 +137,13 @@ async fn main() -> Result<()> {
 
       // Print final result if we didn't get it from streaming
       if !streamed_result.is_empty() {
-        println!("\nFinal result: {}", result);
+        println!("\nFinal result: {streamed_result}");
       } else {
-        println!("{}", result);
+        println!("{result}");
       }
     }
     Err(err) => {
-      tracing::error!("Failed to execute agent: {:?}", err);
+      tracing::error!("Failed to execute agent: {err:?}");
       return Err(err.into());
     }
   }

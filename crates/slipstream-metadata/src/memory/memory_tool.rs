@@ -1,6 +1,6 @@
-use crate::definitions::ToolRef;
-use crate::registry::Registry;
-use crate::{Result, definitions::ToolDefinition, registry::Pagination};
+use crate::Registry;
+use crate::{Pagination, Result};
+use crate::{ToolDefinition, ToolRef};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
@@ -78,7 +78,7 @@ impl Registry for MemoryToolRegistry {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::definitions::{ToolDefinition, ToolProvider};
+  use crate::{ToolDefinition, ToolProvider};
   use schemars::schema_for;
   use std::sync::Arc;
 

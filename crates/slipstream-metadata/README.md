@@ -6,3 +6,4 @@ This registry stores:
 
 * Agent Configurations
 * Tool Definitions
+* Model Configurations

@@ -29,8 +29,14 @@ pub enum Error {
   ParseInt(#[from] ParseIntError),
   #[error("Unknown provider: {0}")]
   UnknownProvider(String),
-  #[error("{0}")]
+  #[error("Unknown agent: {0}")]
+  UnknownAgent(String),
+  #[error(transparent)]
   Core(#[from] slipstream_core::Error),
+  #[error(transparent)]
+  Meta(#[from] slipstream_metadata::Error),
+  #[error("Unsupported executor: restate")]
+  UnsupportedExecutor,
 }
 
 #[cfg(test)]

@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::messages::{Checkpoint, Message, ModelMessage, Response};
+use crate::messages::{Checkpoint, Response};
+#[cfg(test)]
+use crate::messages::{Message, ModelMessage};
 
 /// Tagged union of all possible stream events during message processing.
 /// Serialized with a discriminant "type" field for JSON compatibility.
@@ -70,6 +72,7 @@ pub struct StreamError {
 }
 
 /// Converts a Chunk stream event to a Message with ModelMessage payload.
+#[cfg(test)]
 pub(crate) fn chunk_to_message(dst: &mut Message<ModelMessage>, src: &Chunk) {
   dst.meta = src.meta.clone();
   dst.run_id = Some(src.run_id);
@@ -79,6 +82,7 @@ pub(crate) fn chunk_to_message(dst: &mut Message<ModelMessage>, src: &Chunk) {
 }
 
 /// Converts a StreamResponse event to a Message with ModelMessage payload.
+#[cfg(test)]
 pub(crate) fn response_to_message(dst: &mut Message<ModelMessage>, src: &StreamResponse) {
   dst.meta = src.meta.clone();
   dst.run_id = Some(src.run_id);

@@ -6,8 +6,8 @@
 use async_openai::types::{
   ChatChoice, ChatChoiceStream, ChatCompletionMessageToolCall, ChatCompletionMessageToolCallChunk,
   ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta, ChatCompletionToolType,
-  CompletionUsage, CreateChatCompletionResponse, CreateChatCompletionStreamResponse, FinishReason,
-  FunctionCall, FunctionCallStream, Role,
+  CompletionUsage, CreateChatCompletionResponse, CreateChatCompletionStreamResponse, FunctionCall,
+  Role,
 };
 use slipstream_core::messages::{
   AssistantContentOrParts, AssistantMessage, Response, ToolCallData, ToolCallMessage,
@@ -335,6 +335,7 @@ impl ChatCompletionAccumulator {
   }
 
   /// Get the current accumulated content for a specific choice (if any)
+  #[cfg(test)]
   pub fn current_content(&self, choice_index: u32) -> Option<&str> {
     self
       .response
@@ -345,40 +346,17 @@ impl ChatCompletionAccumulator {
       .as_deref()
   }
 
-  /// Get the current accumulated refusal for a specific choice (if any)
-  pub fn current_refusal(&self, choice_index: u32) -> Option<&str> {
-    self
-      .response
-      .choices
-      .get(choice_index as usize)?
-      .message
-      .refusal
-      .as_deref()
-  }
-
   /// Get the current accumulated content for the first choice (convenience method)
+  #[cfg(test)]
   pub fn first_content(&self) -> Option<&str> {
     self.current_content(0)
-  }
-
-  /// Get the current accumulated refusal for the first choice (convenience method)
-  pub fn first_refusal(&self) -> Option<&str> {
-    self.current_refusal(0)
-  }
-
-  /// Check if the response is finished
-  pub fn is_finished(&self) -> bool {
-    !self.response.choices.is_empty()
-      && self
-        .response
-        .choices
-        .iter()
-        .all(|choice| choice.finish_reason.is_some())
   }
 }
 
 #[cfg(test)]
 mod tests {
+  use async_openai::types::{FinishReason, FunctionCallStream};
+
   use super::*;
 
   fn create_content_chunk(
@@ -386,6 +364,7 @@ mod tests {
     index: u32,
     content: &str,
   ) -> CreateChatCompletionStreamResponse {
+    #[allow(deprecated)]
     CreateChatCompletionStreamResponse {
       id: id.to_string(),
       object: "chat.completion.chunk".to_string(),
@@ -417,6 +396,7 @@ mod tests {
     name: Option<String>,
     args: Option<String>,
   ) -> CreateChatCompletionStreamResponse {
+    #[allow(deprecated)]
     CreateChatCompletionStreamResponse {
       id: id.to_string(),
       object: "chat.completion.chunk".to_string(),
@@ -453,6 +433,7 @@ mod tests {
     index: u32,
     reason: FinishReason,
   ) -> CreateChatCompletionStreamResponse {
+    #[allow(deprecated)]
     CreateChatCompletionStreamResponse {
       id: id.to_string(),
       object: "chat.completion.chunk".to_string(),

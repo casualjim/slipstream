@@ -1,15 +1,13 @@
-use crate::definitions::ToolRef;
-use crate::registry::Registry;
-use crate::registry::http::APIEnvelope;
-use crate::{Result, definitions::ToolDefinition, registry::Pagination};
+use crate::http::{APIEnvelope, create_client};
+use crate::{Pagination, Registry, Result};
+use crate::{ToolDefinition, ToolRef};
 use async_trait::async_trait;
-use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use secrecy::{ExposeSecret, SecretString};
+use reqwest_middleware::ClientWithMiddleware;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use std::env;
-use std::time::Duration;
+use validator::Validate;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateToolRequest {
@@ -36,38 +34,12 @@ pub struct HttpToolRegistry {
 
 impl HttpToolRegistry {
   pub fn new(base_url: String, api_key: SecretString) -> Result<Self> {
-    let mut default_headers = HeaderMap::new();
-    let api_key = HeaderValue::from_bytes(format!("Bearer {}", api_key.expose_secret()).as_bytes())
-      .map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("HeaderValue error: {e}"),
-        ))
-      })?;
-    default_headers.insert(AUTHORIZATION, api_key);
-    let client = ClientBuilder::new(
-      reqwest::Client::builder()
-        .default_headers(default_headers)
-        .build()
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest client build error: {e}"),
-          ))
-        })?,
-    )
-    .with(RetryTransientMiddleware::new_with_policy(
-      ExponentialBackoff::builder()
-        .base(2)
-        .jitter(reqwest_retry::Jitter::Full)
-        .retry_bounds(Duration::from_millis(500), Duration::from_secs(60))
-        .build_with_total_retry_duration(Duration::from_secs(900)),
-    ))
-    .build();
+    let client = create_client(api_key)?;
 
     Ok(Self { client, base_url })
   }
 
+  #[cfg(test)]
   pub fn from_env() -> Result<Self> {
     let base_url = env::var("SLIPSTREAM_BASE_URL").map_err(|e| {
       crate::Error::Io(std::io::Error::new(
@@ -91,14 +63,9 @@ impl Registry for HttpToolRegistry {
   type Key = ToolRef;
 
   async fn put(&self, tool_ref: Self::Key, subject: Self::Subject) -> Result<()> {
-    // Ensure we have a version
-    let version = tool_ref
-      .version
-      .as_deref()
-      .ok_or_else(|| crate::Error::Validation {
-        field: "version",
-        reason: "Tool version is required".to_string(),
-      })?;
+    tool_ref.validate()?;
+    // Safe to unwrap after validation
+    let version = tool_ref.version.as_ref().unwrap();
 
     // Check if tool exists for update vs create
     let exists = self.has(tool_ref.clone()).await?;
@@ -188,14 +155,10 @@ impl Registry for HttpToolRegistry {
   }
 
   async fn del(&self, tool_ref: Self::Key) -> Result<Option<Self::Subject>> {
+    tool_ref.validate()?;
     // Ensure we have a version
-    let version = tool_ref
-      .version
-      .as_deref()
-      .ok_or_else(|| crate::Error::Validation {
-        field: "version",
-        reason: "Tool version is required".to_string(),
-      })?;
+    // Safe to unwrap after validation
+    let version = tool_ref.version.as_ref().unwrap();
 
     // First get the tool to return it if deletion succeeds
     let tool = self.get(tool_ref.clone()).await?;
@@ -234,14 +197,10 @@ impl Registry for HttpToolRegistry {
   }
 
   async fn get(&self, tool_ref: Self::Key) -> Result<Option<Self::Subject>> {
+    tool_ref.validate()?;
     // Ensure we have a version
-    let version = tool_ref
-      .version
-      .as_deref()
-      .ok_or_else(|| crate::Error::Validation {
-        field: "version",
-        reason: "Tool version is required".to_string(),
-      })?;
+    // Safe to unwrap after validation
+    let version = tool_ref.version.as_ref().unwrap();
 
     let url = format!(
       "{}/tools/{}/{}/{}",
@@ -282,14 +241,11 @@ impl Registry for HttpToolRegistry {
   }
 
   async fn has(&self, tool_ref: Self::Key) -> Result<bool> {
+    tool_ref.validate()?;
+
     // Ensure we have a version
-    let version = tool_ref
-      .version
-      .as_deref()
-      .ok_or_else(|| crate::Error::Validation {
-        field: "version",
-        reason: "Tool version is required".to_string(),
-      })?;
+    // Safe to unwrap after validation
+    let version = tool_ref.version.as_ref().unwrap();
 
     let url = format!(
       "{}/tools/{}/{}/{}",
@@ -364,7 +320,7 @@ impl Registry for HttpToolRegistry {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::definitions::{ToolDefinition, ToolProvider};
+  use crate::{ToolDefinition, ToolProvider};
   use schemars::schema_for;
 
   fn create_test_tool(name: &str) -> ToolDefinition {
@@ -427,25 +383,29 @@ mod tests {
 
     // These should fail with specific validation errors
     let get_result = registry.get(tool_ref_no_version.clone()).await;
-    assert!(
-      matches!(get_result, Err(crate::Error::Validation { field, .. }) if field == "version")
-    );
+    match get_result {
+      Err(crate::Error::Validation(_)) => {}
+      _ => panic!("Expected validation error for missing version"),
+    }
 
     let has_result = registry.has(tool_ref_no_version.clone()).await;
-    assert!(
-      matches!(has_result, Err(crate::Error::Validation { field, .. }) if field == "version")
-    );
+    match has_result {
+      Err(crate::Error::Validation(_)) => {}
+      _ => panic!("Expected validation error for missing version"),
+    }
 
     let tool = create_test_tool("test");
     let put_result = registry.put(tool_ref_no_version.clone(), tool).await;
-    assert!(
-      matches!(put_result, Err(crate::Error::Validation { field, .. }) if field == "version")
-    );
+    match put_result {
+      Err(crate::Error::Validation(_)) => {}
+      _ => panic!("Expected validation error for missing version"),
+    }
 
-    let del_result = registry.del(tool_ref_no_version).await;
-    assert!(
-      matches!(del_result, Err(crate::Error::Validation { field, .. }) if field == "version")
-    );
+    let del_result = registry.del(tool_ref_no_version.clone()).await;
+    match del_result {
+      Err(crate::Error::Validation(_)) => {}
+      _ => panic!("Expected validation error for missing version"),
+    }
   }
 
   #[tokio::test]
@@ -459,9 +419,8 @@ mod tests {
 
     let get_result = registry.get(tool_ref_no_version).await;
     match get_result {
-      Err(crate::Error::Validation { field, reason }) => {
-        assert_eq!(field, "version");
-        assert_eq!(reason, "Tool version is required");
+      Err(crate::Error::Validation(validation_errors)) => {
+        assert!(validation_errors.field_errors().contains_key("version"));
       }
       _ => panic!("Expected validation error for missing version"),
     }

@@ -3,12 +3,11 @@ use std::{sync::Arc, usize};
 use async_trait::async_trait;
 use either::Either;
 use futures::StreamExt;
-use slipstream_core::{
-  definitions::Provider,
-  messages::{
-    Aggregator, AssistantContentOrParts, AssistantContentPart, AssistantMessage, Erasable,
-    MessageBuilder, Response, ToolCallMessage,
-  },
+use schemars::JsonSchema;
+use serde::Deserialize;
+use slipstream_core::messages::{
+  Aggregator, AssistantContentOrParts, AssistantContentPart, AssistantMessage, Erasable,
+  MessageBuilder, Response, ToolCallMessage,
 };
 use uuid::Uuid;
 use validator::Validate as _;
@@ -16,76 +15,46 @@ use validator::Validate as _;
 use crate::{
   CompletionParams, Error, Result,
   agent::Agent,
-  completer::Completer,
   events::{StreamError, StreamEvent},
-  executor::{AgentRequest, AgentResponse, Executor},
+  executor::{AgentRequest, AgentResponse, Executor, context::ExecutionContext},
 };
 
 /// A local executor that runs agents within the current process.
-pub struct Local {
-  providers: dashmap::DashMap<String, Arc<dyn Completer>>,
-}
-
-impl Local {
-  /// Creates a new `Local` executor.
-  pub fn new() -> Self {
-    Self {
-      providers: dashmap::DashMap::new(),
-    }
-  }
-
-  /// Registers a completer for a given provider.
-  pub fn with_provider(self, provider: Provider, completer: Arc<dyn Completer>) -> Self {
-    // The key for the provider map is the debug representation of the enum.
-    let name = format!("{:?}", provider);
-    self.providers.insert(name, completer);
-    self
-  }
-}
-
-impl Default for Local {
-  fn default() -> Self {
-    Self::new()
-  }
-}
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Local;
 
 #[async_trait]
 impl Executor for Local {
-  async fn execute(&self, mut params: AgentRequest) -> AgentResponse {
+  async fn execute<T: for<'de> Deserialize<'de> + JsonSchema>(
+    &self,
+    context: ExecutionContext,
+    params: AgentRequest,
+  ) -> AgentResponse<T> {
     params.validate()?;
 
-    let thread = params.session.fork();
-    let active_agent = params.agent.clone();
-    let sender = params.sender.clone();
+    let thread = context.session.fork();
+    let session_id = thread.id();
+    let sender = context.sender.clone();
 
-    // Look up the completer by the provider name.
-    let provider_name = &params.agent.model().provider;
-    let completer = self
-      .providers
-      .get(provider_name)
-      .map(|c| c.value().clone())
-      .ok_or_else(|| Error::UnknownProvider(provider_name.clone()))?;
+    let active_agent = context
+      .get_agent(&params.agent)
+      .ok_or_else(|| Error::UnknownAgent(params.agent.to_string()))?;
 
     let reactor = ReactorLoop {
       run_id: params.run_id,
       active_agent,
-      completer,
       thread,
+      context,
       max_turns: params.max_turns.unwrap_or(usize::MAX),
-      sender: sender.clone(),
     };
 
     match reactor.run().await {
-      Ok((session, result)) => {
-        // Join the forked thread back into the main session on success.
-        params.session.join(&session);
-        Ok(result)
-      }
+      Ok(result) => Ok(serde_json::from_str(&result)?),
       Err(e) => {
         // Send error event before returning
         let _ = sender.send(StreamEvent::Error(StreamError::new(
           params.run_id,
-          params.session.id(),
+          session_id,
           format!("{:?}", e),
         )));
         Err(e)
@@ -98,16 +67,15 @@ impl Executor for Local {
 struct ReactorLoop {
   run_id: Uuid,
   active_agent: Arc<dyn Agent>,
-  completer: Arc<dyn Completer>,
+  context: ExecutionContext,
   thread: Aggregator,
   max_turns: usize,
-  sender: tokio::sync::broadcast::Sender<StreamEvent>,
 }
 
 impl ReactorLoop {
   /// Runs the agent-model interaction loop until a final response is produced
   /// or an error occurs.
-  async fn run(mut self) -> Result<(Aggregator, String)> {
+  async fn run(mut self) -> Result<String> {
     while self.thread.turn_len() < self.max_turns {
       // Validate current agent and provider
       self.validate_agent_and_provider()?;
@@ -115,7 +83,8 @@ impl ReactorLoop {
       // Get chat completion stream and process it
       match self.process_completion_stream().await? {
         StreamCompletion::Break(result) => {
-          return Ok((self.thread.clone(), result));
+          self.context.session.join(&self.thread);
+          return Ok(result);
         }
         StreamCompletion::Continue => {
           // Agent transfer occurred, continue with new agent
@@ -141,8 +110,14 @@ impl ReactorLoop {
   }
 
   async fn process_completion_stream(&mut self) -> Result<StreamCompletion> {
-    let mut stream = self
-      .completer
+    // Look up the completer by the provider name.
+    let provider_name = &self.active_agent.model().provider;
+    let completer = self
+      .context
+      .get_provider(provider_name.parse()?)
+      .ok_or_else(|| Error::UnknownProvider(provider_name.clone()))?;
+
+    let mut stream = completer
       .chat_completion(CompletionParams {
         run_id: self.run_id,
         agent: self.active_agent.clone(),
@@ -156,7 +131,7 @@ impl ReactorLoop {
       let event = event_result?;
 
       // Forward the event immediately
-      if let Err(_) = self.sender.send(event.clone()) {
+      if let Err(_) = self.context.sender.send(event.clone()) {
         // Receiver dropped, but continue processing
       }
 
@@ -331,7 +306,7 @@ impl ReactorLoop {
       self.thread.id(),
       format!("{:?}", err),
     ));
-    let _ = self.sender.send(error_event);
+    let _ = self.context.sender.send(error_event);
   }
 }
 

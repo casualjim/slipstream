@@ -1,8 +1,35 @@
 [package]
-name = "slipstream-registry"
+name = "slipstream-metadata"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 async-nats = "0.42.0"
 slipstream-core = { path = "../slipstream-core" }
+async-trait.workspace = true
+base64.workspace = true
+dashmap.workspace = true
+eyre.workspace = true
+http-cache.workspace = true
+http-cache-reqwest.workspace = true
+jiff.workspace = true
+reqwest.workspace = true
+reqwest-middleware.workspace = true
+reqwest-retry.workspace = true
+schemars.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+typed-builder.workspace = true
+uuid.workspace = true
+validator.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[features]
+default = ["in-memory-providers"]
+in-memory = []
+in-memory-providers = ["in-memory"]
+http-registry = []

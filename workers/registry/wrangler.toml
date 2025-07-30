@@ -1,0 +1,35 @@
+name = "slipstream-registry"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-07-29"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "slipstream-registry-prod"
+database_id = "89007008-546d-4d17-8212-bb483154b77d"
+
+[[queues.producers]]
+binding = "CALLBACK_QUEUE"
+queue = "agent-callbacks"
+
+[[queues.consumers]]
+queue = "agent-callbacks"
+max_batch_size = 10
+max_batch_timeout = 10
+
+[env.preview]
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "slipstream-registry-preview"
+database_id = "7b785b4c-eb17-4184-a647-a4bb31ecda88"
+
+[[env.preview.queues.producers]]
+binding = "CALLBACK_QUEUE"
+queue = "agent-callbacks-preview"
+
+[[env.preview.queues.consumers]]
+queue = "agent-callbacks-preview"
+max_batch_size = 10
+max_batch_timeout = 10

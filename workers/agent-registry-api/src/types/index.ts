@@ -226,7 +226,12 @@ export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 export type Agent = z.infer<typeof AgentSchema>;
 
 // Use the generated Env interface directly
-export interface AppEnv extends Env {}
+// Extend Env to include our Durable Object namespace for EventHub
+// Extend Env to include our Durable Object namespace for EventHub
+export interface AppEnv extends Env {
+  // Durable Object binding for event streaming
+  EVENT_HUB: any;
+}
 
 // Define our auth context type
 export type AuthContext = {

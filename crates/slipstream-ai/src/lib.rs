@@ -18,10 +18,11 @@ use slipstream_core::messages::{self, Aggregator};
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
-pub use agent::{Agent, DefaultAgent};
+pub use agent::*;
 pub use completer::OpenAILikeCompleter;
+pub use engine::Engine;
 pub use events::*;
-pub use executor::{AgentRequest, Executor, Local};
+pub use executor::{AgentRequest, ExecutionContext, Executor, Local};
 
 pub type DefaultStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 

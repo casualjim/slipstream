@@ -1,13 +1,13 @@
-use std::{env, time::Duration};
+#[cfg(test)]
+use std::env;
 
-use crate::registry::Registry;
-use crate::registry::http::APIEnvelope;
-use crate::{Result, definitions::ModelDefinition, registry::Pagination};
+use crate::ModelDefinition;
+use crate::Registry;
+use crate::http::{APIEnvelope, create_client};
+use crate::{Pagination, Result};
 use async_trait::async_trait;
-use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use secrecy::{ExposeSecret, SecretString};
+use reqwest_middleware::ClientWithMiddleware;
+use secrecy::SecretString;
 
 #[derive(Debug, Clone)]
 pub struct HttpModelRegistry {
@@ -17,38 +17,12 @@ pub struct HttpModelRegistry {
 
 impl HttpModelRegistry {
   pub fn new(base_url: String, api_key: SecretString) -> Result<Self> {
-    let mut default_headers = HeaderMap::new();
-    let api_key = HeaderValue::from_bytes(format!("Bearer {}", api_key.expose_secret()).as_bytes())
-      .map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("HeaderValue error: {e}"),
-        ))
-      })?;
-    default_headers.insert(AUTHORIZATION, api_key);
-    let client = ClientBuilder::new(
-      reqwest::Client::builder()
-        .default_headers(default_headers)
-        .build()
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest client build error: {e}"),
-          ))
-        })?,
-    )
-    .with(RetryTransientMiddleware::new_with_policy(
-      ExponentialBackoff::builder()
-        .base(2)
-        .jitter(reqwest_retry::Jitter::Full)
-        .retry_bounds(Duration::from_millis(500), Duration::from_secs(60))
-        .build_with_total_retry_duration(Duration::from_secs(900)),
-    ))
-    .build();
+    let client = create_client(api_key)?;
 
     Ok(Self { client, base_url })
   }
 
+  #[cfg(test)]
   pub fn from_env() -> Result<Self> {
     let base_url = env::var("SLIPSTREAM_BASE_URL").map_err(|e| {
       crate::Error::Io(std::io::Error::new(
@@ -173,7 +147,7 @@ impl Registry for HttpModelRegistry {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::definitions::{ApiDialect, Modality, ModelCapability, ModelDefinition, Provider};
+  use crate::{ApiDialect, Modality, ModelCapability, ModelDefinition, Provider};
 
   fn create_test_model(name: &str) -> ModelDefinition {
     ModelDefinition {

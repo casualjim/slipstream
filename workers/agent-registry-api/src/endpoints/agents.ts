@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { ModelService, ProjectService, ToolService } from "../lib/services";
 import { generateSlug } from "../lib/utils";
-import type { HandleArgs } from "../types";
+import type { Agent, HandleArgs } from "../types";
 import { AgentSchema, semverSchema } from "../types";
 
 // Schema for API input, using array of strings for tools
@@ -13,7 +13,10 @@ const InputAgentSchema = z.object({
   description: AgentSchema.shape.description,
   model: AgentSchema.shape.model,
   instructions: AgentSchema.shape.instructions,
-  availableTools: z.array(z.string()).nullish().describe("A list of tools available to the agent, identified by their composite key."),
+  availableTools: z
+    .array(z.string())
+    .nullish()
+    .describe("A list of tools available to the agent, identified by their composite key."),
   organization: AgentSchema.shape.organization,
   project: AgentSchema.shape.project,
 });
@@ -51,7 +54,7 @@ const agentMeta = {
  */
 export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Create a new Agent",
     description: "Creates a new agent in the registry",
     ...agentMeta,
@@ -139,7 +142,7 @@ _meta = {
  */
 export class GetAgent extends D1ReadEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Get a specific Agent",
     description: "Retrieves a single agent by its slug and version from the registry",
     ...agentMeta,
@@ -148,27 +151,43 @@ _meta = {
   // Override to fix Chanfana bug with empty filters and handle composite keys
   async fetch(filters: any) {
     if (!filters.filters || filters.filters.length === 0) {
+      console.log("[GetAgent] No filters provided");
       return null;
     }
 
     const conditions = filters.filters.map((obj: any) => `${obj.field} = ?`);
     const values = filters.filters.map((obj: any) => obj.value);
 
+    // Log the query and values
+    console.log(
+      "[GetAgent] Query:",
+      `SELECT * FROM ${this.meta.model.tableName} WHERE ${conditions.join(" AND ")} LIMIT 1`,
+    );
+    console.log("[GetAgent] Values:", values);
+
     const obj = await this.getDBBinding()
       .prepare(`SELECT * FROM ${this.meta.model.tableName} WHERE ${conditions.join(" AND ")} LIMIT 1`)
       .bind(...values)
-      .all();
+      .all<Agent>();
+
+    // Log the DB results
+    console.log("[GetAgent] DB Results:", obj.results);
 
     if (!obj.results || obj.results.length === 0) {
-      return null;
+      console.log("[GetAgent] Agent not found");
+      throw new HTTPException(404, { message: "Agent not found" });
     }
 
-    const result = obj.results[0] as any;
+    const result = obj.results[0];
+
+    // Log the result before auth check
+    console.log("[GetAgent] Found agent:", result);
 
     // Check authorization
     const [c] = this.args;
     const auth = c.get("auth");
     if (!auth.organizations.includes(result.organization as string)) {
+      console.log("[GetAgent] Access denied for org:", result.organization);
       throw new HTTPException(403, { message: "Access denied" });
     }
 
@@ -186,7 +205,7 @@ _meta = {
  */
 export class UpdateAgent extends D1UpdateEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Update an existing Agent",
     description: "Updates an agent in the registry",
     ...agentMeta,
@@ -251,7 +270,7 @@ _meta = {
  */
 export class DeleteAgent extends D1DeleteEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Delete an Agent",
     description: "Deletes an agent from the registry",
     ...agentMeta,
@@ -279,7 +298,7 @@ _meta = {
  */
 export class ListAgents extends D1ListEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "List all Agents",
     description: "Retrieves a list of all agents in the registry",
     ...agentMeta,

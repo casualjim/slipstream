@@ -1,64 +1,95 @@
-use std::sync::Arc;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use slipstream_core::messages::MessageBuilder;
+use slipstream_metadata::{
+  AgentDefinition, AgentRef, ModelDefinition, Provider, Store, ToolDefinition, ToolRef,
+};
+use uuid::Uuid;
 
-use slipstream_core::{
-  definitions::{AgentDefinition, ModelDefinition, ToolDefinition, ToolRef},
-  registry::Registry,
-  registry::http::{
-    AgentRegistry as HttpAgentRegistry, ModelRegistry as HttpModelRegistry,
-    ToolRegistry as HttpToolRegistry,
-  },
-  registry::memory::{
-    AgentRegistry as MemoryAgentRegistry, ModelRegistry as MemoryModelRegistry,
-    ToolRegistry as MemoryToolRegistry,
-  },
+use crate::{
+  AgentRequest, Error, ExecutionContext, Executor, ProviderConfig, Result, StreamEvent,
+  executor::{AgentResponse, ExecutorConfig},
 };
 
-use crate::{Error, Result};
-
 pub struct Engine {
-  agent_registry: Arc<dyn Registry<Key = String, Subject = AgentDefinition>>,
-  model_registry: Arc<dyn Registry<Key = String, Subject = ModelDefinition>>,
-  tool_registry: Arc<dyn Registry<Key = ToolRef, Subject = ToolDefinition>>,
+  meta: Store,
+  providers: dashmap::DashMap<Provider, ProviderConfig>,
+  executor: ExecutorConfig,
 }
 
-pub enum RegistryKind {
-  InMemory,
-  ApiService,
+impl Default for Engine {
+  fn default() -> Self {
+    Self {
+      meta: Store::default(),
+      providers: dashmap::DashMap::new(),
+      executor: ExecutorConfig::default(),
+    }
+  }
 }
 
 impl Engine {
-  pub fn new(registry_kind: RegistryKind) -> Result<Self> {
-    match registry_kind {
-      RegistryKind::InMemory => {
-        let agent_registry = Arc::new(MemoryAgentRegistry::new());
-        let model_registry = Arc::new(MemoryModelRegistry::new());
-        let tool_registry = Arc::new(MemoryToolRegistry::new());
-        Ok(Self {
-          agent_registry,
-          model_registry,
-          tool_registry,
-        })
-      }
-      RegistryKind::ApiService => {
-        let agent_registry = Arc::new(HttpAgentRegistry::from_env().map_err(Error::from)?);
-        let model_registry = Arc::new(HttpModelRegistry::from_env().map_err(Error::from)?);
-        let tool_registry = Arc::new(HttpToolRegistry::from_env().map_err(Error::from)?);
-        Ok(Self {
-          agent_registry,
-          model_registry,
-          tool_registry,
-        })
-      }
-    }
+  pub fn new() -> Self {
+    Self::default()
   }
 
-  pub fn register_agent(&self, agent: AgentDefinition) -> Result<()> {
-    // TODO: Implement agent registration logic
-    unimplemented!("Implement agent registration logic, needs to be idempotent")
+  pub async fn register_agent(&self, agent: AgentDefinition) -> Result<()> {
+    Ok(self.meta.agents().put((&agent).into(), agent).await?)
   }
 
-  pub fn register_tool(&self, tool: ToolDefinition) -> Result<()> {
-    // TODO: Implement agent registration logic
-    unimplemented!("Implement agent registration logic, needs to be idempotent")
+  pub async fn register_tool(&self, tool: ToolDefinition) -> Result<()> {
+    Ok(
+      self
+        .meta
+        .tools()
+        .put(
+          tool
+            .slug
+            .parse::<ToolRef>()
+            .map_err(|e| Error::AgentTool(e))?,
+          tool,
+        )
+        .await?,
+    )
+  }
+
+  pub async fn register_model(&self, model: ModelDefinition) -> Result<()> {
+    Ok(self.meta.models().put(model.name.clone(), model).await?)
+  }
+
+  pub async fn register_provider(&self, provider: Provider, config: ProviderConfig) -> Result<()> {
+    self.providers.insert(provider, config);
+    Ok(())
+  }
+
+  pub async fn execute<T: for<'de> Deserialize<'de> + JsonSchema>(
+    &self,
+    agent: impl Into<AgentRef>,
+    prompt: impl Into<String>,
+    sender: tokio::sync::broadcast::Sender<StreamEvent>,
+  ) -> AgentResponse<T> {
+    let prompt = prompt.into();
+
+    let executor = match self.executor {
+      ExecutorConfig::Local => crate::Local,
+      ExecutorConfig::Restate { .. } => {
+        return Err(Error::UnsupportedExecutor);
+      }
+    };
+
+    let run_id = Uuid::now_v7();
+
+    let mut context = ExecutionContext::new(sender);
+    context.session.add_user_prompt(
+      MessageBuilder::new()
+        .with_run_id(run_id)
+        .user_prompt(prompt),
+    );
+
+    let params = AgentRequest::builder()
+      .run_id(Uuid::now_v7())
+      .agent(agent.into())
+      .build();
+
+    executor.execute(context, params).await
   }
 }

@@ -1,6 +1,6 @@
 
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "workers/registry"]
 resolver = "3"
 
 [workspace.package]
@@ -21,7 +21,7 @@ base64 = "0.22.1"
 color-backtrace = "0.7.0"
 
 color-eyre = "0.6"
-ctor = "0.4.2"
+ctor = "0.4.3"
 
 dashmap = "6.1.0"
 dotenvy = "0.15"
@@ -30,9 +30,19 @@ eyre = "0.6"
 
 futures = "0.3"
 
+http-cache = { version = "=1.0.0-alpha.1", default-features = false, features = [
+  "manager-moka",
+  "streaming-tokio",
+  "with-http-types",
+] }
+http-cache-reqwest = { version = "=1.0.0-alpha.1", default-features = false, features = [
+  "manager-moka",
+  "streaming",
+] }
+
 jiff = { version = "0.2.15", features = ["serde", "logging"] }
-kuzu = { version = "0.11.0", features = ["arrow"] }
-lancedb = { version = "0.21.1", features = ["polars"] }
+kuzu = { version = "0.11.1", features = ["arrow"] }
+lancedb = { version = "0.21.2", features = ["polars"] }
 lzma-sys = { version = "0.1.20", features = ["static"] }
 mockall = "0.13.1"
 nuid = "0.6"

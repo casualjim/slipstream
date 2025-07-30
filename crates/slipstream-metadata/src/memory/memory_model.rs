@@ -1,5 +1,4 @@
-use crate::registry::Registry;
-use crate::{Result, definitions::ModelDefinition, registry::Pagination};
+use crate::{Modality, ModelCapability, ModelDefinition, Pagination, Provider, Registry, Result};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
@@ -15,9 +14,94 @@ impl Default for MemoryModelRegistry {
 
 impl MemoryModelRegistry {
   pub fn new() -> Self {
-    Self {
-      store: dashmap::DashMap::new(),
-    }
+    let store = dashmap::DashMap::new();
+
+    let gpt41: ModelDefinition = ModelDefinition::builder()
+      .id("openai/gpt-4.1")
+      .name("GPT-4.1")
+      .description("OpenAI's GPT-4.1 model, optimized for general tasks.")
+      .provider(Provider::OpenAI)
+      .capabilities([
+        ModelCapability::Chat,
+        ModelCapability::Completion,
+        ModelCapability::FunctionCalling,
+        ModelCapability::StructuredOutput,
+        ModelCapability::CodeExecution,
+        ModelCapability::Tuning,
+        ModelCapability::Search,
+      ])
+      .input_modalities([Modality::Text, Modality::Image])
+      .output_modalities([Modality::Text])
+      .context_size(1048576)
+      .max_tokens(32768)
+      .build();
+
+    let o4mini: ModelDefinition = ModelDefinition::builder()
+        .id("openai/o4-mini")
+        .name("o4-mini")
+        .description("OpenAI's o4-mini model, optimized for fast, effective reasoning with exceptionally efficient performance in coding and visual tasks.")
+        .provider(Provider::OpenAI)
+        .capabilities([
+          ModelCapability::Chat,
+          ModelCapability::Completion,
+          ModelCapability::FunctionCalling,
+          ModelCapability::StructuredOutput,
+          ModelCapability::CodeExecution,
+          ModelCapability::Tuning,
+          ModelCapability::Search,
+        ])
+        .input_modalities([Modality::Text, Modality::Image])
+        .output_modalities([Modality::Text])
+        .context_size(200000)
+        .max_tokens(100000)
+        .build();
+
+    let gpt41mini: ModelDefinition = ModelDefinition::builder()
+      .id("openai/gpt-4.1-mini")
+      .name("GPT-4.1 Mini")
+      .description("OpenAI's GPT-4.1 Mini model, optimized for lightweight, fast general tasks.")
+      .provider(Provider::OpenAI)
+      .capabilities([
+        ModelCapability::Chat,
+        ModelCapability::Completion,
+        ModelCapability::FunctionCalling,
+        ModelCapability::StructuredOutput,
+        ModelCapability::CodeExecution,
+        ModelCapability::Tuning,
+        ModelCapability::Search,
+      ])
+      .input_modalities([Modality::Text, Modality::Image])
+      .output_modalities([Modality::Text])
+      .context_size(1_000_000)
+      .max_tokens(32_768)
+      .build();
+
+    let gpt41nano: ModelDefinition = ModelDefinition::builder()
+        .id("openai/gpt-4.1-nano")
+        .name("GPT-4.1 Nano")
+        .description("OpenAI's GPT-4.1 Nano model, optimized for ultra-fast, efficient reasoning and coding tasks.")
+        .provider(Provider::OpenAI)
+        .capabilities([
+          ModelCapability::Chat,
+          ModelCapability::Completion,
+          ModelCapability::FunctionCalling,
+          ModelCapability::StructuredOutput,
+          ModelCapability::CodeExecution,
+          ModelCapability::Tuning,
+          ModelCapability::Search,
+        ])
+        .input_modalities([Modality::Text, Modality::Image])
+        .output_modalities([Modality::Text])
+        .context_size(1_000_000)
+        .max_tokens(32_768)
+        .build();
+
+    store.insert(gpt41mini.id.as_bytes().to_vec(), gpt41mini);
+    store.insert(gpt41nano.id.as_bytes().to_vec(), gpt41nano);
+    store.insert(gpt41.id.as_bytes().to_vec(), gpt41);
+    store.insert(o4mini.id.as_bytes().to_vec(), o4mini);
+
+    Self { store }
   }
 }
 
@@ -80,7 +164,7 @@ impl Registry for MemoryModelRegistry {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::definitions::{ApiDialect, Modality, ModelCapability, ModelDefinition, Provider};
+  use crate::{ApiDialect, Modality, ModelCapability, ModelDefinition, Provider};
   use std::sync::Arc;
 
   fn create_test_model(name: &str) -> ModelDefinition {

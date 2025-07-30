@@ -14,8 +14,8 @@ use async_openai::{
   Client,
   config::OpenAIConfig,
   types::{
-    ChatCompletionRequestMessage, ChatCompletionResponseMessage, ChatCompletionTool,
-    ChatCompletionToolType, CreateChatCompletionRequest, CreateChatCompletionRequestArgs,
+    ChatCompletionResponseMessage, ChatCompletionTool, ChatCompletionToolType,
+    CreateChatCompletionRequest, CreateChatCompletionRequestArgs,
     CreateChatCompletionStreamResponse, FunctionObject, ResponseFormat, ResponseFormatJsonSchema,
   },
 };
@@ -182,7 +182,7 @@ impl OpenAILikeCompleter {
             }
 
             // Forward the chunk as a complete chunk event
-            match stream_event_from_chunk(run_id, turn_id, checkpoint.clone(), chunk) {
+            match stream_event_from_chunk(run_id, turn_id, chunk) {
               Ok(event) => {
                 yield Ok(event);
               }
@@ -265,7 +265,6 @@ fn is_termination_signal(chunk: &CreateChatCompletionStreamResponse) -> bool {
 fn stream_event_from_chunk(
   run_id: Uuid,
   turn_id: Uuid,
-  checkpoint: Checkpoint,
   chunk: CreateChatCompletionStreamResponse,
 ) -> Result<StreamEvent> {
   let choice = chunk.choices.into_iter().next().ok_or(Error::NoChoices)?;
@@ -431,6 +430,10 @@ mod tests {
   impl Agent for TestAgent {
     fn name(&self) -> &str {
       &self.name
+    }
+
+    fn version(&self) -> &str {
+      "0.1.0"
     }
 
     fn instructions(&self) -> InstructionsMessage {
@@ -1190,8 +1193,6 @@ mod tests {
 
   #[tokio::test]
   async fn test_simple_content_stream_fixture() {
-    use slipstream_core::messages::Aggregator;
-
     // Load and parse the captured simple content stream fixture
     let fixture_path = "src/completer/openailike/fixtures/simple_content_stream.json";
     let fixture_content =
@@ -1208,13 +1209,12 @@ mod tests {
     // Test that stream_event_from_chunk processes every chunk without errors
     let run_id = Uuid::now_v7();
     let turn_id = Uuid::now_v7();
-    let checkpoint = Aggregator::new().checkpoint();
 
     let mut successful_chunks = 0;
     // Remove unused events vector
 
     for (i, chunk) in chunks.iter().enumerate() {
-      match stream_event_from_chunk(run_id, turn_id, checkpoint.clone(), chunk.clone()) {
+      match stream_event_from_chunk(run_id, turn_id, chunk.clone()) {
         Ok(event) => {
           successful_chunks += 1;
           // Validate event structure
@@ -1310,8 +1310,6 @@ mod tests {
 
   #[tokio::test]
   async fn test_tool_call_stream_fixture() {
-    use slipstream_core::messages::Aggregator;
-
     // Load and parse the captured tool call stream fixture
     let fixture_path = "src/completer/openailike/fixtures/tool_call_stream.json";
     let fixture_content =
@@ -1328,13 +1326,12 @@ mod tests {
     // Test stream_event_from_chunk with every chunk
     let run_id = Uuid::now_v7();
     let turn_id = Uuid::now_v7();
-    let checkpoint = Aggregator::new().checkpoint();
 
     let mut tool_call_events = 0;
     let mut successful_chunks = 0;
 
     for (i, chunk) in chunks.iter().enumerate() {
-      match stream_event_from_chunk(run_id, turn_id, checkpoint.clone(), chunk.clone()) {
+      match stream_event_from_chunk(run_id, turn_id, chunk.clone()) {
         Ok(event) => {
           successful_chunks += 1;
 
@@ -1452,8 +1449,6 @@ mod tests {
 
   #[tokio::test]
   async fn test_mixed_content_and_tool_stream_fixture() {
-    use slipstream_core::messages::Aggregator;
-
     // Load and parse the mixed content and tool call stream fixture
     let fixture_path = "src/completer/openailike/fixtures/mixed_content_and_tool_stream.json";
     let fixture_content =
@@ -1470,10 +1465,9 @@ mod tests {
     // Process all chunks without errors
     let run_id = Uuid::now_v7();
     let turn_id = Uuid::now_v7();
-    let checkpoint = Aggregator::new().checkpoint();
 
-    let mut assistant_events = 0;
-    let mut tool_call_events = 0;
+    let mut _assistant_events = 0;
+    let mut _tool_call_events = 0;
     let mut has_content = false;
     let mut has_tool_calls = false;
 
@@ -1490,11 +1484,11 @@ mod tests {
         }
       }
 
-      match stream_event_from_chunk(run_id, turn_id, checkpoint.clone(), chunk.clone()) {
+      match stream_event_from_chunk(run_id, turn_id, chunk.clone()) {
         Ok(event) => match &event {
           crate::events::StreamEvent::Chunk(chunk_event) => match &chunk_event.chunk {
-            Response::Assistant(_) => assistant_events += 1,
-            Response::ToolCall(_) => tool_call_events += 1,
+            Response::Assistant(_) => _assistant_events += 1,
+            Response::ToolCall(_) => _tool_call_events += 1,
           },
           _ => panic!("Expected Chunk event at chunk {}", i),
         },
@@ -1543,12 +1537,9 @@ mod tests {
 
   #[tokio::test]
   async fn test_error_handling_with_malformed_chunks() {
-    use slipstream_core::messages::Aggregator;
-
     // Test error handling with chunk that has no choices
     let run_id = Uuid::now_v7();
     let turn_id = Uuid::now_v7();
-    let checkpoint = Aggregator::new().checkpoint();
 
     let malformed_chunk = CreateChatCompletionStreamResponse {
       id: "test-malformed".to_string(),
@@ -1561,7 +1552,7 @@ mod tests {
       usage: None,
     };
 
-    let result = stream_event_from_chunk(run_id, turn_id, checkpoint, malformed_chunk);
+    let result = stream_event_from_chunk(run_id, turn_id, malformed_chunk);
 
     // Should fail with NoChoices error
     assert!(result.is_err(), "Should fail when chunk has no choices");

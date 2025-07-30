@@ -1,10 +1,10 @@
-use crate::registry::Registry;
-use crate::{Result, definitions::AgentDefinition, registry::Pagination};
+use crate::{AgentDefinition, AgentRef};
+use crate::{Pagination, Registry, Result};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
 pub struct MemoryAgentRegistry {
-  store: dashmap::DashMap<Vec<u8>, AgentDefinition>,
+  store: dashmap::DashMap<String, AgentDefinition>,
 }
 
 impl Default for MemoryAgentRegistry {
@@ -24,15 +24,15 @@ impl MemoryAgentRegistry {
 #[async_trait]
 impl Registry for MemoryAgentRegistry {
   type Subject = AgentDefinition;
-  type Key = String;
+  type Key = AgentRef;
 
   async fn put(&self, name: Self::Key, subject: Self::Subject) -> Result<()> {
-    self.store.insert(name.into_bytes(), subject);
+    self.store.insert(name.to_string(), subject);
     Ok(())
   }
 
   async fn del(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    if let Some((_, removed)) = self.store.remove(&name.into_bytes()) {
+    if let Some((_, removed)) = self.store.remove(&name.to_string()) {
       Ok(Some(removed))
     } else {
       Ok(None)
@@ -40,7 +40,7 @@ impl Registry for MemoryAgentRegistry {
   }
 
   async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    if let Some(subject) = self.store.get(name.as_bytes()) {
+    if let Some(subject) = self.store.get(&name.to_string()) {
       Ok(Some(subject.clone()))
     } else {
       Ok(None)
@@ -48,15 +48,11 @@ impl Registry for MemoryAgentRegistry {
   }
 
   async fn has(&self, name: Self::Key) -> Result<bool> {
-    Ok(self.store.contains_key(&name.into_bytes()))
+    Ok(self.store.contains_key(&name.to_string()))
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
-    let mut keys: Vec<String> = self
-      .store
-      .iter()
-      .map(|kv| String::from_utf8_lossy(kv.key()).to_string())
-      .collect();
+    let mut keys: Vec<String> = self.store.iter().map(|kv| kv.key().to_string()).collect();
 
     // Sort for consistent pagination
     keys.sort();
@@ -81,7 +77,7 @@ impl Registry for MemoryAgentRegistry {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::definitions::AgentDefinition;
+  use crate::AgentDefinition;
   use std::sync::Arc;
 
   fn assert_agent_eq(a: &AgentDefinition, b: &AgentDefinition) {
@@ -118,29 +114,29 @@ mod tests {
 
   /// Test template function for agent registry
   pub async fn test_agent_registry_basic_operations(
-    registry: Arc<dyn Registry<Subject = AgentDefinition, Key = String>>,
+    registry: Arc<dyn Registry<Subject = AgentDefinition, Key = AgentRef>>,
   ) {
     let agent1 = create_test_agent("agent1");
     let agent2 = create_test_agent("agent2");
 
+    let key1 = AgentRef::from(&agent1);
+    let key2 = AgentRef::from(&agent2);
+    // For a nonexistent key, create a dummy AgentDefinition
+    let agent_nonexistent = create_test_agent("nonexistent");
+    let key_nonexistent = AgentRef::from(&agent_nonexistent);
+
     // Test put and get
-    registry
-      .put("agent1".to_string(), agent1.clone())
-      .await
-      .unwrap();
-    let retrieved = registry.get("agent1".to_string()).await.unwrap();
+    registry.put(key1.clone(), agent1.clone()).await.unwrap();
+    let retrieved = registry.get(key1.clone()).await.unwrap();
     assert!(retrieved.is_some());
     assert_agent_eq(&retrieved.unwrap(), &agent1);
 
     // Test has
-    assert!(registry.has("agent1".to_string()).await.unwrap());
-    assert!(!registry.has("nonexistent".to_string()).await.unwrap());
+    assert!(registry.has(key1.clone()).await.unwrap());
+    assert!(!registry.has(key_nonexistent.clone()).await.unwrap());
 
     // Test put another agent
-    registry
-      .put("agent2".to_string(), agent2.clone())
-      .await
-      .unwrap();
+    registry.put(key2.clone(), agent2.clone()).await.unwrap();
 
     // Test keys (no pagination)
     let keys = registry
@@ -150,22 +146,22 @@ mod tests {
       })
       .await
       .unwrap();
-    let mut expected_keys = vec!["agent1".to_string(), "agent2".to_string()];
+    let mut expected_keys = vec![key1.to_string(), key2.to_string()];
     expected_keys.sort();
     assert_eq!(keys, expected_keys);
 
     // Test delete
-    let deleted = registry.del("agent1".to_string()).await.unwrap();
+    let deleted = registry.del(key1.clone()).await.unwrap();
     assert!(deleted.is_some());
     assert_agent_eq(&deleted.unwrap(), &agent1);
-    assert!(!registry.has("agent1".to_string()).await.unwrap());
+    assert!(!registry.has(key1.clone()).await.unwrap());
 
     // Verify agent1 is gone
-    let retrieved = registry.get("agent1".to_string()).await.unwrap();
+    let retrieved = registry.get(key1.clone()).await.unwrap();
     assert!(retrieved.is_none());
 
     // Delete non-existent
-    let deleted = registry.del("nonexistent".to_string()).await.unwrap();
+    let deleted = registry.del(key_nonexistent.clone()).await.unwrap();
     assert!(deleted.is_none());
   }
 
@@ -182,17 +178,16 @@ mod tests {
     let mut agent1_v2 = create_test_agent("agent1");
     agent1_v2.model = "gpt-4.1-mini".to_string();
 
+    let key1 = AgentRef::from(&agent1_v1);
+
     // Put initial version
-    registry.put("agent1".to_string(), agent1_v1).await.unwrap();
+    registry.put(key1.clone(), agent1_v1).await.unwrap();
 
     // Update with new version
-    registry
-      .put("agent1".to_string(), agent1_v2.clone())
-      .await
-      .unwrap();
+    registry.put(key1.clone(), agent1_v2.clone()).await.unwrap();
 
     // Verify updated version is retrieved
-    let retrieved = registry.get("agent1".to_string()).await.unwrap().unwrap();
+    let retrieved = registry.get(key1.clone()).await.unwrap().unwrap();
     assert_eq!(retrieved.model, "gpt-4.1-mini");
   }
 }
