@@ -1,349 +1,65 @@
-# Slipstream Rust Project Overview
+# Agent Commands & Style Guide
 
-This document provides a comprehensive overview of the Slipstream project's Rust components, including architecture, key modules, and implementation details. Slipstream is an agentic compute and state cloud built with Rust, exposing a REST API with a focus on temporal knowledge graph systems.
-
-## Project Architecture
-
-Slipstream follows a modular monolith architecture with a Rust workspace containing multiple crates:
-
-1. **slipstream-core** - Core data structures and messaging components
-2. **slipstream-ai** - Agent orchestration and AI integration
-3. **slipstream-memory** - Temporal knowledge graph with dual-database architecture
-4. **slipstream-store** - Low-level database abstractions and utilities
-5. **slipstream-server** - REST API server implementation
-6. **slipstream-metadata** - Agent/tool registry types
-
-## Key Technologies
-
-- **Backend Framework**: Rust with Tokio async runtime
-- **Web Framework**: Axum for REST API
-- **Databases**:
-  - KuzuDB (graph database for indexing)
-  - LanceDB (vector database for storage)
-- **Serialization**: Serde for JSON serialization/deserialization
-- **AI Integration**: async-openai for OpenAI-compatible APIs
-- **Observability**: Tracing, OpenTelemetry
-- **Testing**: tokio-test, mockall
-
-## Instructions for Using Graphiti's MCP Tools for Agent Memory
-
-### Before Starting Any Task
-
-- **Always search first:** Use the `search_nodes` tool to look for relevant preferences and procedures before beginning work.
-- **Search for facts too:** Use the `search_facts` tool to discover relationships and factual information that may be relevant to your task.
-- **Filter by entity type:** Specify `Preference`, `Procedure`, or `Requirement` in your node search to get targeted results.
-- **Review all matches:** Carefully examine any preferences, procedures, or facts that match your current task.
-
-### Always Save New or Updated Information
-
-- **Capture requirements and preferences immediately:** When a user expresses a requirement or preference, use `add_memory` to store it right away.
-  - _Best practice:_ Split very long requirements into shorter, logical chunks.
-- **Be explicit if something is an update to existing knowledge.** Only add what's changed or new to the graph.
-- **Document procedures clearly:** When you discover how a user wants things done, record it as a procedure.
-- **Record factual relationships:** When you learn about connections between entities, store these as facts.
-- **Be specific with categories:** Label preferences and procedures with clear categories for better retrieval later.
-
-### During Your Work
-
-- **Respect discovered preferences:** Align your work with any preferences you've found.
-- **Follow procedures exactly:** If you find a procedure for your current task, follow it step by step.
-- **Apply relevant facts:** Use factual information to inform your decisions and recommendations.
-- **Stay consistent:** Maintain consistency with previously identified preferences, procedures, and facts.
-
-### Best Practices
-
-- **Search before suggesting:** Always check if there's established knowledge before making recommendations.
-- **Combine node and fact searches:** For complex tasks, search both nodes and facts to build a complete picture.
-- **Use `center_node_uuid`:** When exploring related information, center your search around a specific node.
-- **Prioritize specific matches:** More specific information takes precedence over general information.
-- **Be proactive:** If you notice patterns in user behavior, consider storing them as preferences or procedures.
-
-**Remember:** The knowledge graph is your memory. Use it consistently to provide personalized assistance that respects the user's established preferences, procedures, and factual context.
-
-## Core Components
-
-### 1. slipstream-core
-
-This crate provides fundamental data structures for the Slipstream system:
-
-- **Definitions**: Model definitions, agent configurations, and tool specifications
-- **Messages**: Comprehensive message system for agent communication with:
-  - Content and assistant message types
-  - Text, image, audio, and video content parts
-  - Request/response message envelopes with metadata
-- **Registry**: Trait definitions for agent, model, and tool registries
-
-### 2. slipstream-ai
-
-Implements agent orchestration and AI integration:
-
-- **Agents**: Agent trait and implementations with instructions, tools, and model configurations
-- **Completers**: AI model completion interfaces
-- **Embedders**: Text embedding generation
-- **Rerankers**: Result reranking capabilities
-- **Events**: Event system for agent communication
-- **Executors**: Task execution mechanisms
-
-### 3. slipstream-memory
-
-Implements a temporal knowledge graph system with dual-database architecture:
-
-- **Nodes**: Interaction, Concept, and Theme node types
-- **Edges**: Relationships between nodes (Mentions, Relates, Includes)
-- **Engine**: Core memory engine coordinating both databases
-- **Migrations**: Database schema migration system
-- **Mutations**: Data modification operations
-- **Queries**: Data retrieval operations
-- **Service**: High-level interaction interfaces
-
-Architecture:
-```
-┌─────────────┐    ┌─────────────┐
-│   GraphDB   │    │  Vector DB  │
-│   (KuzuDB)  │◄──►│  (LanceDB)  │
-│   [Index]   │    │ [Source]    │
-└─────────────┘    └─────────────┘
-       │                  │
-       └──────────────────┘
-              2PC
-```
-
-### 4. slipstream-store
-
-Provides low-level database abstractions:
-
-- **Database**: Unified interface for KuzuDB and LanceDB operations
-- **Operations**: Query and mutation operation definitions
-- **Traits**: Database command and execution traits
-- **Graph**: KuzuDB integration
-- **Meta**: LanceDB integration
-- **Streams**: Result streaming utilities
-
-Key features:
-- 2-Phase Commit (2PC) protocol for consistency
-- Automatic rollback and version-based recovery
-- Async architecture with MVCC (Multi-Version Concurrency Control)
-
-### 5. slipstream-server
-
-REST API server implementation:
-
-- **App State**: Shared application state with memory engine
-- **Routes**: API endpoint definitions
-- **Server**: HTTP server configuration and startup
-- **Models**: API data transfer objects
-
-### 6. slipstream-metadata
-
-Agent/tool registry types:
-
-- Agent configurations
-- Tool definitions
-
-## Data Model
-
-### Node Types
-
-1. **Interaction** (formerly Episode): Temporal data points representing events, messages, or observations
-2. **Concept** (formerly Entity): Real-world entities with attributes and vector embeddings
-3. **Theme** (formerly Community): Clusters of related concepts forming semantic groups
-
-### Edge Types
-
-1. **Mentions**: Links Interactions to referenced Concepts
-2. **Relates**: Fact-based relationships between Concepts with temporal validity
-3. **Includes**: Membership relationships from Themes to Concepts
-
-## Key Implementation Details
-
-### Database Architecture
-
-Slipstream uses a dual-database architecture for optimal performance:
-
-- **KuzuDB** serves as a high-performance index for graph traversals and complex queries
-- **LanceDB** acts as the source of truth storing complete data with embeddings
-
-The system implements a 2-Phase Commit (2PC) protocol to ensure consistency across both databases.
-
-### Message System
-
-The messaging system provides a rich, typed interface for agent communication with:
-- Support for various content types (text, images, audio, video)
-- Request/response patterns
-- Tool calling and responses
-- Message metadata (timestamps, sender info)
-
-### Agent System
-
-Agents are defined with:
-- Instructions and system messages
-- Available tools with schemas
-- Model configurations
-- Response schemas for structured output
-
-### 2-Phase Commit Implementation
-
-The 2PC implementation ensures atomic operations across both databases:
-1. Begin KuzuDB transaction (serializes write transactions)
-2. Execute GraphDB operations within the transaction
-3. Execute LanceDB operations (auto-commits)
-4. If GraphDB fails after LanceDB succeeded, rollback LanceDB
-5. Commit or rollback KuzuDB based on success/failure
-
-## Getting Started
-
-### Prerequisites
-
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Bun](https://bun.sh/docs/installation)
-- [Mise](https://mise.jdx.dev/getting-started.html)
-
-### Installation
-
-1.  **Install tools:**
-    ```bash
-    mise install
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    cargo fetch
-    bun install
-    ```
-
-### Building
-
-To build the entire project, including the Rust workspace and type-checking the workers, run:
+## Essential Commands
 ```bash
-mise run build
+# Build
+mise run build          # Full build
+mise run build:rust     # Rust only
+
+# Test
+mise run test           # All tests
+mise run test:rust      # Rust tests
+mise run test:rust --package <crate_name>  # Single crate
+cargo test --package slipstream-memory --test integration_test  # Single test
+
+# Lint/Format
+mise run lint           # All linters
+mise run format         # Format all
 ```
 
-To build only the Rust components, run:
+## Dev Server & Testing Setup
+
+### Agent Registry Auth (Critical)
+Check if agent registry is running: `ps aux | grep agent-registry-api`
+
+If not running:
 ```bash
-mise run build:rust
-```
-
-### Testing
-
-#### Auth for the agent registry
-
-To run the tests successfully you need to make sure that the agent registry is running and accessible.
-
-You should first check if it is already running by looking at the process list or using a tool like `ps` or `top`.
-
-If it is not running, you can start it by running:
-
-```sh
+export SLIPSTREAM_BASE_URL=http://localhost:8787/api/v1
+export SLIPSTREAM_API_KEY=test-api-key
 bun run --cwd workers/agent-registry-api dev > dev.log &
 ```
 
-It's important to background it if you're an LLM otherwise you can't make requests to it.
-
-Once the server is running you can set the following environment variables:
-
-```env
-SLIPSTREAM_BASE_URL=http://localhost:8787/api/v1
-SLIPSTREAM_API_KEY=test-api-key
-```
-
-#### Running tests
-
-To run all tests for the project:
+### Testing Workers
 ```bash
-mise run test
-```
-
-To run only the tests for the workers:
-```bash
-mise run test:workers
-```
-
-To run the tests for just the agent-registry-api:
-
-```sh
 mise run test:workers agent-registry-api
+mise run test:workers agent-registry-api path/to/file.test.ts
 ```
 
-To run the tests from a single file for just the agent-registry-api:
-
-```sh
-mise run test:workers agent-registry-api relative/to/packagejson/file.test.ts
-```
-
-To test only the Rust components:
-```bash
-mise run test:rust
-```
-
-To test a single rust crate:
-```bash
-mise run test:rust --package <crate_name>
-```
-
-### Running
-
-To run the Slipstream server:
+### Running Server
 ```bash
 cargo run --package slipstream-server
 ```
 
-### Linting and Formatting
+## Code Style
+- **Rust**: `eyre::Result`, async/await, no unwraps
+- **TypeScript**: Strict types, no `any`, use `.all<Type>()`
+- **Package Manager**: Use `bun` not `npm` (bun install, bun run)
+- **Naming**: snake_case (Rust), camelCase (TypeScript)
+- **Error handling**: `thiserror` for custom errors
+- **Comments**: Document public APIs only
 
-The project uses mise tasks for linting and formatting:
+## Project Structure
+- **slipstream-core**: Data structures
+- **slipstream-ai**: Agent orchestration
+- **slipstream-memory**: Knowledge graph (KuzuDB + LanceDB)
+- **slipstream-store**: Database abstractions
+- **slipstream-server**: REST API
+- **slipstream-metadata**: Registry types
 
-**Linting:**
-- To run all linters: `mise run lint`
-- To lint only Rust: `mise run lint:rust`
-
-**Formatting:**
-- To format all code: `mise run format`
-- To format only Rust: `mise run format:rust`
-
-## Development Guidelines
-
-1. Follow Rust best practices and idioms
-2. Use async/await for all I/O operations
-3. Implement proper error handling with `eyre::Result`
-4. Write comprehensive tests for new features
-5. Document public APIs with rustdoc comments
-6. Follow the existing code style and patterns
-
-## Testing Strategy
-
-The project uses a comprehensive testing approach:
-- Unit tests for individual components
-- Integration tests for cross-component functionality
-- Property-based testing where applicable
-- Mocking for external dependencies
-- Concurrent testing for database operations
-
-## Observability
-
-The system includes comprehensive tracing and logging:
-- Structured logging with tracing
-- OpenTelemetry integration
-- Error reporting with color-backtrace in development
-
-## Working with chanfana
-
-Chanfana allows for typed queries, there should never be a need to have `any` or `record<string, uknown>`.
-
-### BAD - Don't do this
-
-For a type named `Project`
-
-```ts
-const obj = await this.getDBBinding()
-      .prepare(`SELECT * FROM ${this.meta.model.tableName} WHERE ${conditions.join(" AND ")} LIMIT 1`)
-      .bind(...values)
-      .all();
-```
-
-### :white-checkmark: GOOD - Definitely do this
-
-```ts
-const obj = await this.getDBBinding()
-      .prepare(`SELECT * FROM ${this.meta.model.tableName} WHERE ${conditions.join(" AND ")} LIMIT 1`)
-      .bind(...values)
-      .all<Project>(); // enjoy fully typed results
-```
+## Agent Stance - Collaborative & Explicit
+- **Never assume**: Always check if agent registry is running before tests
+- **Ask before acting**: Confirm environment setup before running commands
+- **Verify state**: Run `ps aux | grep agent-registry-api` to check if server is running
+- **Explicit setup**: Always export required env vars before testing
+- **Collaborative**: Explain what you're doing and why, seek confirmation on unclear steps
+- **Document assumptions**: State any assumptions you're making before proceeding

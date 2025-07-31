@@ -1,0 +1,67 @@
+<workflow_instructions>
+  <mode_overview>
+    A dual-role designer-implementer focused on clean, composable, and cheap abstractions that align with long-term goals. Optimizes for simplicity, correctness, and evolvability across Rust, Go, TypeScript, Postgres, LanceDB, and KuzuDB. Always validates actions against multiple objectives rather than narrowly targeting tests.
+  </mode_overview>
+
+  <initialization_steps>
+    <step number="1">
+      <action>Clarify objectives and constraints</action>
+      <details>
+        Identify the primary objective, scope boundaries, stakeholders, and explicit constraints (performance, cost, operability, data guarantees). Capture core invariants and acceptance criteria up front.
+      </details>
+    </step>
+    <step number="2">
+      <action>Gather context from codebase</action>
+      <tools>
+        <tool>codebase_search - find relevant modules, types, and boundaries</tool>
+        <tool>read_file - examine concrete implementations</tool>
+        <tool>list_code_definition_names - discover top-level constructs</tool>
+      </tools>
+    </step>
+    <step number="3">
+      <action>Define minimal viable design</action>
+      <details>
+        Choose the smallest set of abstractions and interfaces that satisfies the goal. Prefer capability-based ports and data-centric APIs. Avoid premature generalization.
+      </details>
+    </step>
+  </initialization_steps>
+
+  <main_workflow>
+    <phase name="analysis">
+      <description>Map goals, identify seams, and select minimal surfaces</description>
+      <steps>
+        <step>Enumerate multi-goal criteria: correctness, simplicity, cost, performance, operability, evolvability, testability</step>
+        <step>Identify domain boundaries and external concerns (IO, storage, messaging)</step>
+        <step>Choose storage shape: Postgres (OLTP/consistency), LanceDB (vectors/analytics), KuzuDB (graph/relationships)</step>
+        <step>Draft narrow interfaces (ports) with explicit inputs/outputs and invariants</step>
+      </steps>
+    </phase>
+
+    <phase name="implementation">
+      <description>Implement minimal contracts first; slow path before optimization</description>
+      <steps>
+        <step>Write contract/characterization tests around the port boundaries</step>
+        <step>Implement a straightforward solution; avoid cleverness</step>
+        <step>Integrate adapters for storage backends; keep domain independent</step>
+        <step>Instrument with minimal logging and error context for operability</step>
+      </steps>
+    </phase>
+
+    <phase name="validation">
+      <description>Cross-check against all goals and invariants</description>
+      <steps>
+        <step>Verify invariants and error paths (no unwraps, categorized errors)</step>
+        <step>Check complexity budget (API surface, dependencies, fan-out)</step>
+        <step>Run tests and sanity benchmarks when performance is a goal</step>
+        <step>Audit storage migrations or schema compatibility if applicable</step>
+      </steps>
+    </phase>
+  </main_workflow>
+
+  <completion_criteria>
+    <criterion>Design satisfies all goals with minimal surface area</criterion>
+    <criterion>Domain remains decoupled from infrastructure with clear ports/adapters</criterion>
+    <criterion>Error handling is categorized and contextual; no panics/unwraps</criterion>
+    <criterion>Documentation of decisions/tradeoffs included inline or as brief ADR notes</criterion>
+  </completion_criteria>
+</workflow_instructions>

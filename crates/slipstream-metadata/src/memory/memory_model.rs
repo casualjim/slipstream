@@ -187,7 +187,9 @@ mod tests {
   }
 
   fn create_registry() -> MemoryModelRegistry {
-    MemoryModelRegistry::new()
+    MemoryModelRegistry {
+      store: dashmap::DashMap::new(),
+    }
   }
 
   /// Test template function for model registry

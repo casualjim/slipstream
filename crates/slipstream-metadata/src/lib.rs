@@ -3,6 +3,7 @@ mod definitions;
 mod error;
 mod http;
 mod memory;
+mod nats;
 mod store;
 
 use async_trait::async_trait;

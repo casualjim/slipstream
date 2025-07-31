@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 async-nats = "0.42.0"
+futures-util = "0.3"
 slipstream-core = { path = "../slipstream-core" }
 async-trait.workspace = true
 base64.workspace = true
@@ -24,9 +25,8 @@ thiserror.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
 validator.workspace = true
-
-[dev-dependencies]
 tokio.workspace = true
+
 
 [features]
 default = ["in-memory-providers"]

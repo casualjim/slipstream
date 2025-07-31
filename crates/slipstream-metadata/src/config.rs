@@ -2,11 +2,13 @@ use std::sync::Arc;
 
 use secrecy::SecretString;
 
+use tokio;
 use crate::{
   AgentDefinition, AgentRef, ModelDefinition, Registry, Result, ToolDefinition, ToolRef,
   http::AgentRegistry as HttpAgentRegistry, http::ModelRegistry as HttpModelRegistry,
   http::ToolRegistry as HttpToolRegistry, memory::AgentRegistry as MemoryAgentRegistry,
   memory::ModelRegistry as MemoryModelRegistry, memory::ToolRegistry as MemoryToolRegistry,
+  nats::NatsAgentRegistry, nats::NatsModelRegistry, nats::NatsToolRegistry,
 };
 
 pub enum Config {
@@ -14,6 +16,9 @@ pub enum Config {
   ApiService {
     base_url: String,
     api_key: Option<SecretString>,
+  },
+  Nats {
+    prefix: String,
   },
 }
 
@@ -35,6 +40,10 @@ impl Config {
   pub fn memory() -> Self {
     Self::InMemory
   }
+
+  pub fn nats(prefix: impl Into<String>) -> Self {
+    Self::Nats { prefix: prefix.into() }
+  }
 }
 
 impl Config {
@@ -44,6 +53,13 @@ impl Config {
       Config::ApiService { base_url, api_key } => Arc::new(
         HttpAgentRegistry::new(base_url.clone(), api_key.clone().unwrap_or_default()).unwrap(),
       ),
+      Config::Nats { prefix } => {
+        // NOTE: This is async, so you may want to spawn or block_on in real usage
+        let registry = tokio::runtime::Runtime::new()
+          .unwrap()
+          .block_on(NatsAgentRegistry::new(prefix));
+        Arc::new(registry.unwrap())
+      }
     }
   }
 
@@ -53,6 +69,12 @@ impl Config {
       Config::ApiService { base_url, api_key } => Arc::new(
         HttpToolRegistry::new(base_url.clone(), api_key.clone().unwrap_or_default()).unwrap(),
       ),
+      Config::Nats { prefix } => {
+        let registry = tokio::runtime::Runtime::new()
+          .unwrap()
+          .block_on(NatsToolRegistry::new(prefix));
+        Arc::new(registry.unwrap())
+      }
     }
   }
 
@@ -62,6 +84,12 @@ impl Config {
       Config::ApiService { base_url, api_key } => Arc::new(
         HttpModelRegistry::new(base_url.clone(), api_key.clone().unwrap_or_default()).unwrap(),
       ),
+      Config::Nats { prefix } => {
+        let registry = tokio::runtime::Runtime::new()
+          .unwrap()
+          .block_on(NatsModelRegistry::new(prefix));
+        Arc::new(registry.unwrap())
+      }
     }
   }
 }
