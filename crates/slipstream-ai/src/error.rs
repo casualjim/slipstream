@@ -31,6 +31,8 @@ pub enum Error {
   UnknownProvider(String),
   #[error("Unknown agent: {0}")]
   UnknownAgent(String),
+  #[error("Unknown model: {0}")]
+  UnknownModel(String),
   #[error(transparent)]
   Core(#[from] slipstream_core::Error),
   #[error(transparent)]

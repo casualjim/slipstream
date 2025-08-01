@@ -1,8 +1,8 @@
 use crate::{AgentDefinition, AgentRef, Pagination, Registry, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::stream::StreamExt;
 
-use crate::nats::setup::{create_kv_bucket, NatsKv};
+use crate::nats::setup::{NatsKv, create_kv_bucket};
 
 #[derive(Debug, Clone)]
 pub struct NatsAgentRegistry {
@@ -108,7 +108,11 @@ impl Registry for NatsAgentRegistry {
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
-    let raw_keys: Vec<Result<String, _>> = self.inner.kv.keys().await
+    let raw_keys: Vec<Result<String, _>> = self
+      .inner
+      .kv
+      .keys()
+      .await
       .map_err(|e| crate::Error::Registry {
         reason: format!("NATS KV keys error: {e}"),
         status_code: None,

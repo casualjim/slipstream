@@ -1,8 +1,8 @@
 use crate::{Pagination, Registry, Result, ToolDefinition, ToolRef};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::stream::StreamExt;
 
-use crate::nats::setup::{create_kv_bucket, NatsKv};
+use crate::nats::setup::{NatsKv, create_kv_bucket};
 
 #[derive(Debug, Clone)]
 pub struct NatsToolRegistry {
@@ -108,7 +108,11 @@ impl Registry for NatsToolRegistry {
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
-    let raw_keys: Vec<Result<String, _>> = self.inner.kv.keys().await
+    let raw_keys: Vec<Result<String, _>> = self
+      .inner
+      .kv
+      .keys()
+      .await
       .map_err(|e| crate::Error::Registry {
         reason: format!("NATS KV keys error: {e}"),
         status_code: None,
@@ -173,7 +177,13 @@ mod tests {
     // Has
     assert!(registry.has(key.clone()).await.unwrap());
     // Keys
-    let keys = registry.keys(Pagination { page: None, per_page: None }).await.unwrap();
+    let keys = registry
+      .keys(Pagination {
+        page: None,
+        per_page: None,
+      })
+      .await
+      .unwrap();
     assert!(keys.contains(&key.to_string()));
     // Del
     let deleted = registry.del(key.clone()).await.unwrap().unwrap();

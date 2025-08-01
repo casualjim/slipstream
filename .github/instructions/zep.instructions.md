@@ -1,9 +1,11 @@
 ---
 applyTo: '**'
-description: "Instructions for Using Graphiti's MCP Tools for Agent Memory"
+description: "Instructions for Using Zeps's Graphiti MCP Tools for Agent Memory"
 ---
 
-## Instructions for Using Graphiti's MCP Tools for Agent Memory
+## Instructions for Using Zeps Graphiti's MCP Tools for Agent Memory
+
+This toolset is an mcp tool named zep.
 
 ### Before Starting Any Task
 

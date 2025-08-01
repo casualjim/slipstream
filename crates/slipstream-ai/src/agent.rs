@@ -325,7 +325,7 @@ mod tests {
   #[tokio::test]
   async fn test_hello_agent() {
     let mut agent = DefaultAgent {
-      name: "hello/0.1.0".into(),
+      name: "hello/0.1.0".parse().expect("Invalid agent name"),
       instructions: "Say hello to the world".to_string(),
       model: CompleterConfig::builder()
         .model("gpt-4.1-mini".to_string())

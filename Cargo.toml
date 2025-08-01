@@ -11,6 +11,7 @@ edition = "2024"
 arrow = "55.2"
 arrow-array = "55.2"
 assert_cmd = "2.0.17"
+async-nats = "0.42.0"
 async-openai = { git = "https://github.com/casualjim/async-openai", branch = "reqwest-middleware", default-features = false, features = [
   "rustls-webpki-roots",
 ] }

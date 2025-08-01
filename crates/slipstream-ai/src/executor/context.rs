@@ -3,27 +3,30 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use slipstream_core::messages::Aggregator;
 use slipstream_metadata::{AgentRef, Provider, ToolRef};
-use tokio::sync::broadcast::Sender;
 
-use crate::{Agent, StreamEvent, agent::AgentTool, completer::Completer};
+use crate::{Agent, agent::AgentTool, completer::Completer};
 
 pub struct ExecutionContext {
   providers: DashMap<Provider, Arc<dyn Completer>>,
   tools: DashMap<ToolRef, Arc<AgentTool>>,
   agents: DashMap<AgentRef, Arc<dyn Agent>>,
   pub session: Aggregator,
-  pub sender: Sender<StreamEvent>,
 }
 
-impl ExecutionContext {
-  pub fn new(sender: Sender<StreamEvent>) -> Self {
+impl Default for ExecutionContext {
+  fn default() -> Self {
     Self {
       providers: DashMap::new(),
       tools: DashMap::new(),
       agents: DashMap::new(),
       session: Aggregator::new(),
-      sender,
     }
+  }
+}
+
+impl ExecutionContext {
+  pub fn new() -> Self {
+    Self::default()
   }
 
   pub fn register_provider(&self, provider_id: Provider, provider: Arc<dyn Completer>) {

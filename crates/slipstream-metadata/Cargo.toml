@@ -3,14 +3,19 @@ name = "slipstream-metadata"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = ["in-memory-providers"]
+in-memory = []
+in-memory-providers = ["in-memory"]
+http-registry = []
+
 [dependencies]
-async-nats = "0.42.0"
-futures-util = "0.3"
-slipstream-core = { path = "../slipstream-core" }
+async-nats.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 dashmap.workspace = true
 eyre.workspace = true
+futures.workspace = true
 http-cache.workspace = true
 http-cache-reqwest.workspace = true
 jiff.workspace = true
@@ -21,15 +26,9 @@ schemars.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+slipstream-core = { path = "../slipstream-core" }
 thiserror.workspace = true
+tokio.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
 validator.workspace = true
-tokio.workspace = true
-
-
-[features]
-default = ["in-memory-providers"]
-in-memory = []
-in-memory-providers = ["in-memory"]
-http-registry = []

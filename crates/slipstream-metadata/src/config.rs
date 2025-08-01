@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use secrecy::SecretString;
 
-use tokio;
 use crate::{
   AgentDefinition, AgentRef, ModelDefinition, Registry, Result, ToolDefinition, ToolRef,
   http::AgentRegistry as HttpAgentRegistry, http::ModelRegistry as HttpModelRegistry,
@@ -10,6 +9,10 @@ use crate::{
   memory::ModelRegistry as MemoryModelRegistry, memory::ToolRegistry as MemoryToolRegistry,
   nats::NatsAgentRegistry, nats::NatsModelRegistry, nats::NatsToolRegistry,
 };
+
+pub type AgentRegistry = Arc<dyn Registry<Key = AgentRef, Subject = AgentDefinition>>;
+pub type ToolRegistry = Arc<dyn Registry<Key = ToolRef, Subject = ToolDefinition>>;
+pub type ModelRegistry = Arc<dyn Registry<Key = String, Subject = ModelDefinition>>;
 
 pub enum Config {
   InMemory,
@@ -42,53 +45,51 @@ impl Config {
   }
 
   pub fn nats(prefix: impl Into<String>) -> Self {
-    Self::Nats { prefix: prefix.into() }
+    Self::Nats {
+      prefix: prefix.into(),
+    }
   }
 }
 
 impl Config {
-  pub(crate) fn agents(&self) -> Arc<dyn Registry<Key = AgentRef, Subject = AgentDefinition>> {
+  pub(crate) async fn agents(&self) -> Result<AgentRegistry> {
     match self {
-      Config::InMemory => Arc::new(MemoryAgentRegistry::new()),
-      Config::ApiService { base_url, api_key } => Arc::new(
-        HttpAgentRegistry::new(base_url.clone(), api_key.clone().unwrap_or_default()).unwrap(),
-      ),
+      Config::InMemory => Ok(Arc::new(MemoryAgentRegistry::new())),
+      Config::ApiService { base_url, api_key } => Ok(Arc::new(HttpAgentRegistry::new(
+        base_url.clone(),
+        api_key.clone().unwrap_or_default(),
+      )?)),
       Config::Nats { prefix } => {
-        // NOTE: This is async, so you may want to spawn or block_on in real usage
-        let registry = tokio::runtime::Runtime::new()
-          .unwrap()
-          .block_on(NatsAgentRegistry::new(prefix));
-        Arc::new(registry.unwrap())
+        let registry = NatsAgentRegistry::new(prefix).await;
+        Ok(Arc::new(registry?))
       }
     }
   }
 
-  pub(crate) fn tools(&self) -> Arc<dyn Registry<Key = ToolRef, Subject = ToolDefinition>> {
+  pub(crate) async fn tools(&self) -> Result<ToolRegistry> {
     match self {
-      Config::InMemory => Arc::new(MemoryToolRegistry::new()),
-      Config::ApiService { base_url, api_key } => Arc::new(
-        HttpToolRegistry::new(base_url.clone(), api_key.clone().unwrap_or_default()).unwrap(),
-      ),
+      Config::InMemory => Ok(Arc::new(MemoryToolRegistry::new())),
+      Config::ApiService { base_url, api_key } => Ok(Arc::new(HttpToolRegistry::new(
+        base_url.clone(),
+        api_key.clone().unwrap_or_default(),
+      )?)),
       Config::Nats { prefix } => {
-        let registry = tokio::runtime::Runtime::new()
-          .unwrap()
-          .block_on(NatsToolRegistry::new(prefix));
-        Arc::new(registry.unwrap())
+        let registry = NatsToolRegistry::new(prefix).await;
+        Ok(Arc::new(registry?))
       }
     }
   }
 
-  pub(crate) fn models(&self) -> Arc<dyn Registry<Key = String, Subject = ModelDefinition>> {
+  pub(crate) async fn models(&self) -> Result<ModelRegistry> {
     match self {
-      Config::InMemory => Arc::new(MemoryModelRegistry::new()),
-      Config::ApiService { base_url, api_key } => Arc::new(
-        HttpModelRegistry::new(base_url.clone(), api_key.clone().unwrap_or_default()).unwrap(),
-      ),
+      Config::InMemory => Ok(Arc::new(MemoryModelRegistry::new())),
+      Config::ApiService { base_url, api_key } => Ok(Arc::new(HttpModelRegistry::new(
+        base_url.clone(),
+        api_key.clone().unwrap_or_default(),
+      )?)),
       Config::Nats { prefix } => {
-        let registry = tokio::runtime::Runtime::new()
-          .unwrap()
-          .block_on(NatsModelRegistry::new(prefix));
-        Arc::new(registry.unwrap())
+        let registry = NatsModelRegistry::new(prefix).await;
+        Ok(Arc::new(registry?))
       }
     }
   }

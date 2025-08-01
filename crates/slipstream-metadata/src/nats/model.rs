@@ -1,7 +1,7 @@
 use crate::nats::setup::{NatsKv, create_kv_bucket};
 use crate::{ModelDefinition, Pagination, Registry, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::stream::StreamExt;
 
 #[derive(Debug, Clone)]
 pub struct NatsModelRegistry {

@@ -63,12 +63,6 @@ impl TryFrom<String> for AgentRef {
   }
 }
 
-impl From<&str> for AgentRef {
-  fn from(value: &str) -> Self {
-    value.parse().expect("Failed to parse AgentRef from str")
-  }
-}
-
 fn deserialize_tools<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
   D: Deserializer<'de>,

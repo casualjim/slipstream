@@ -1,12 +1,11 @@
-use std::sync::Arc;
-
 use crate::{
-  AgentDefinition, AgentRef, Config, ModelDefinition, Registry, ToolDefinition, ToolRef,
+  AgentRegistry, Config, ModelRegistry, Result, ToolRegistry,
+  memory::{
+    AgentRegistry as MemoryAgentRegistry, ModelRegistry as MemoryModelRegistry,
+    ToolRegistry as MemoryToolRegistry,
+  },
 };
-
-pub type AgentRegistry = Arc<dyn Registry<Key = AgentRef, Subject = AgentDefinition>>;
-pub type ToolRegistry = Arc<dyn Registry<Key = ToolRef, Subject = ToolDefinition>>;
-pub type ModelRegistry = Arc<dyn Registry<Key = String, Subject = ModelDefinition>>;
+use std::sync::Arc;
 
 pub struct Store {
   ag: AgentRegistry,
@@ -16,16 +15,20 @@ pub struct Store {
 
 impl Default for Store {
   fn default() -> Self {
-    Self::new(Config::memory())
+    Self {
+      ag: Arc::new(MemoryAgentRegistry::new()),
+      to: Arc::new(MemoryToolRegistry::new()),
+      mo: Arc::new(MemoryModelRegistry::new()),
+    }
   }
 }
 
 impl Store {
-  pub fn new(config: Config) -> Self {
-    let ag = config.agents();
-    let to = config.tools();
-    let mo = config.models();
-    Self { ag, to, mo }
+  pub async fn new(config: Config) -> Result<Self> {
+    let ag = config.agents().await?;
+    let to = config.tools().await?;
+    let mo = config.models().await?;
+    Ok(Self { ag, to, mo })
   }
 
   pub fn agents(&self) -> AgentRegistry {

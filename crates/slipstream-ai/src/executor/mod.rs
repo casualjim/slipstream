@@ -1,10 +1,15 @@
 mod context;
 mod local;
 
+// // Include test modules so cargo test discovers them (they live next to this mod).
+// // These modules contain integration-style tests using the real OpenAI provider.
+// #[cfg(test)]
+// mod local_integration_tests;
+// #[cfg(test)]
+// mod local_tool_tests;
+
 use async_trait::async_trait;
-use schemars::JsonSchema;
 use secrecy::SecretString;
-use serde::Deserialize;
 use slipstream_metadata::AgentRef;
 use typed_builder::TypedBuilder;
 use uuid::Uuid;
@@ -13,7 +18,7 @@ use validator::{Validate, ValidationError};
 pub use context::ExecutionContext;
 pub use local::Local;
 
-use crate::{Result, completer::StructuredOutput};
+use crate::{ResultStream, StreamEvent, completer::StructuredOutput};
 
 fn validate_uuid_not_nil(uuid: &Uuid) -> Result<(), ValidationError> {
   if uuid.is_nil() {
@@ -44,8 +49,6 @@ pub struct AgentRequest {
   pub reasoning_effort: crate::ReasoningEffort,
 }
 
-pub type AgentResponse<T> = Result<T>;
-
 #[derive(Debug, Clone, Default)]
 pub enum ExecutorConfig {
   #[default]
@@ -57,10 +60,10 @@ pub enum ExecutorConfig {
 
 #[async_trait]
 pub trait Executor: Send + Sync {
-  /// Executes the given agent with the provided parameters.
-  async fn execute<T: for<'de> Deserialize<'de> + JsonSchema>(
+  /// Executes the given agent with the provided parameters and returns a stream of events.
+  async fn execute(
     &self,
     context: ExecutionContext,
     params: AgentRequest,
-  ) -> AgentResponse<T>;
+  ) -> ResultStream<StreamEvent>;
 }

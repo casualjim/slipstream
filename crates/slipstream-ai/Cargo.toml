@@ -32,6 +32,7 @@ tokio.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
 validator.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 axum = { workspace = true }

@@ -5,6 +5,7 @@ mod engine;
 mod error;
 mod events;
 mod executor;
+mod prompt;
 mod reranker;
 
 use std::{pin::Pin, sync::Arc};
@@ -23,6 +24,7 @@ pub use completer::OpenAILikeCompleter;
 pub use engine::Engine;
 pub use events::*;
 pub use executor::{AgentRequest, ExecutionContext, Executor, Local};
+pub use prompt::Prompt;
 
 pub type DefaultStream<T> = Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 
