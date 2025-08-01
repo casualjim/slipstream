@@ -178,7 +178,7 @@ impl Clone for AgentTool {
 #[automock]
 pub trait Agent: Debug + Send + Sync + 'static {
   fn name(&self) -> &str;
-  fn version(&self) -> &str;
+  fn version(&self) -> &semver::Version;
 
   fn instructions(&self) -> InstructionsMessage;
   fn model(&self) -> &CompleterConfig;
@@ -242,8 +242,12 @@ impl Agent for DefaultAgent {
     &self.name.slug
   }
 
-  fn version(&self) -> &str {
-    self.name.version.as_deref().unwrap_or("latest")
+  fn version(&self) -> &semver::Version {
+    self
+      .name
+      .version
+      .as_ref()
+      .expect("agent version must be set")
   }
 
   fn instructions(&self) -> InstructionsMessage {
@@ -283,6 +287,7 @@ impl DefaultAgent {
 mod tests {
   use std::sync::OnceLock;
 
+  use semver::Version;
   use uuid::Uuid;
 
   use super::*;
@@ -359,7 +364,12 @@ mod tests {
           let name = args["name"].as_str().unwrap_or("subagent");
           let version = args["version"].as_str().unwrap_or("0.1.0");
           let agent = DefaultAgent::builder()
-            .name(AgentRef::builder().slug(name).version(version).build())
+            .name(
+              AgentRef::builder()
+                .slug(name)
+                .version(Version::parse(version).unwrap())
+                .build(),
+            )
             .instructions("I am a subagent".to_string())
             .build();
           Ok(Arc::new(agent) as Arc<dyn Agent>)

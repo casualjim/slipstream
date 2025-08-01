@@ -28,7 +28,7 @@ const orgMeta = {
 };
 
 const readOnlyMeta = {
-  fields: orgMeta.fields,  // Include fields for proper path parameter extraction
+  fields: orgMeta.fields, // Include fields for proper path parameter extraction
   model: orgMeta.model,
   pathParameters: orgMeta.pathParameters,
 };
@@ -42,7 +42,7 @@ const readOnlyMeta = {
  */
 export class CreateOrganization extends D1CreateEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Create a new Organization",
     description: "Creates a new organization in the registry",
     ...orgMeta,
@@ -69,7 +69,7 @@ _meta = {
  */
 export class GetOrganization extends D1ReadEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Get a specific Organization",
     description: "Retrieves a single organization by its slug from the registry",
     ...readOnlyMeta,
@@ -104,7 +104,7 @@ _meta = {
  */
 export class UpdateOrganization extends D1UpdateEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Update an existing Organization",
     description: "Updates an organization in the registry",
     ...orgMeta,
@@ -120,7 +120,7 @@ _meta = {
  */
 export class DeleteOrganization extends D1DeleteEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Delete an Organization",
     description: "Deletes an organization from the registry",
     ...orgMeta,
@@ -153,7 +153,7 @@ _meta = {
  */
 export class ListOrganizations extends D1ListEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "List all Organizations",
     description: "Retrieves a list of all organizations in the registry",
     ...readOnlyMeta,

@@ -35,7 +35,7 @@ const toolMeta = {
     serializer: (obj: Record<string, unknown>) => {
       // Convert JSON string back to object for the response
       if (obj.arguments && typeof obj.arguments === "string") {
-        try{
+        try {
           obj.arguments = JSON.parse(obj.arguments as string);
         } catch {
           console.error(`Failed to parse arguments for tool ${obj.slug}:`, obj.arguments);
@@ -66,7 +66,7 @@ const toolMeta = {
  */
 export class CreateTool extends D1CreateEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Create a new Tool",
     description: "Creates a new tool in the registry",
     ...toolMeta,
@@ -107,7 +107,7 @@ _meta = {
  */
 export class GetTool extends D1ReadEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Get a specific Tool",
     description: "Retrieves a single tool by its provider, slug, and version from the registry",
     ...toolMeta,
@@ -143,7 +143,7 @@ _meta = {
  */
 export class UpdateTool extends D1UpdateEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Update an existing Tool",
     description: "Updates a tool in the registry",
     ...toolMeta,
@@ -181,7 +181,7 @@ _meta = {
  */
 export class DeleteTool extends D1DeleteEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Delete a Tool",
     description: "Deletes a tool from the registry",
     ...toolMeta,
@@ -197,7 +197,7 @@ _meta = {
  */
 export class ListTools extends D1ListEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "List all Tools",
     description: "Retrieves a list of all tools in the registry",
     ...toolMeta,

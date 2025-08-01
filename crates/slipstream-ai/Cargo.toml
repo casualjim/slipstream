@@ -23,16 +23,17 @@ reqwest-retry.workspace = true
 reqwest-tracing.workspace = true
 schemars.workspace = true
 secrecy.workspace = true
+semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 slipstream-core = { path = "../slipstream-core" }
 slipstream-metadata = { path = "../slipstream-metadata" }
 thiserror.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
 validator.workspace = true
-tracing.workspace = true
 
 [dev-dependencies]
 axum = { workspace = true }

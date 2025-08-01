@@ -1,6 +1,6 @@
 use crate::{AgentDefinition, AgentRef, Pagination, Registry, Result};
 use async_trait::async_trait;
-use futures::{TryStreamExt, stream::StreamExt};
+use futures::stream::StreamExt;
 
 use crate::nats::setup::{NatsKv, create_kv_bucket};
 
@@ -11,7 +11,7 @@ pub struct NatsAgentRegistry {
 
 impl NatsAgentRegistry {
   pub async fn new(bucket_prefix: &str) -> Result<Self> {
-    let bucket_name = format!("{}-agents", bucket_prefix);
+    let bucket_name = format!("{bucket_prefix}-agents");
     let inner = create_kv_bucket(&bucket_name).await?;
     Ok(Self { inner })
   }
@@ -30,7 +30,7 @@ async fn list_versioned_keys(inner: &NatsKv, slug: &str) -> Result<Vec<String>> 
     .filter_map(|r| async move { r.ok() })
     .collect()
     .await;
-  let prefix = format!("{}/", slug);
+  let prefix = format!("{slug}/");
   let keys: Vec<String> = raw_keys
     .into_iter()
     .filter(|k| k.starts_with(&prefix))
@@ -230,7 +230,7 @@ mod tests {
     AgentDefinition::builder()
       .name(name)
       .model("gpt-4")
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .slug(name)
       .instructions("You are a helpful assistant")
       .organization("test-org")
@@ -246,9 +246,9 @@ mod tests {
     // two versions for same slug
     let mut v1 = create_test_agent("nats-ver-agent");
     v1.slug = "nats-ver-agent".to_string();
-    v1.version = "1.0.0".to_string();
+    v1.version = semver::Version::parse("1.0.0").unwrap();
     let mut v2 = v1.clone();
-    v2.version = "1.1.0".to_string();
+    v2.version = semver::Version::parse("1.1.0").unwrap();
 
     let r1 = AgentRef::from(&v1);
     let r2 = AgentRef::from(&v2);
@@ -264,7 +264,10 @@ mod tests {
       .get(AgentRef::builder().slug("nats-ver-agent").build())
       .await
       .unwrap();
-    assert_eq!(latest.unwrap().version, "1.1.0");
+    assert_eq!(
+      latest.unwrap().version,
+      semver::Version::parse("1.1.0").unwrap()
+    );
 
     // delete 1.1.0 and ensure fallback to 1.0.0
     let _ = registry.del(r2.clone()).await.unwrap();
@@ -272,7 +275,10 @@ mod tests {
       .get(AgentRef::builder().slug("nats-ver-agent").build())
       .await
       .unwrap();
-    assert_eq!(latest_after.unwrap().version, "1.0.0");
+    assert_eq!(
+      latest_after.unwrap().version,
+      semver::Version::parse("1.0.0").unwrap()
+    );
   }
 
   #[tokio::test]

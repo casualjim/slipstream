@@ -1,11 +1,9 @@
 use crate::Result;
-use async_nats::Client;
 use async_nats::jetstream;
 use async_nats::jetstream::kv::Store as KvStore;
 
 #[derive(Debug, Clone)]
 pub struct NatsKv {
-  pub client: Client,
   pub kv: KvStore,
 }
 
@@ -31,5 +29,5 @@ pub async fn create_kv_bucket(bucket_name: &str) -> Result<NatsKv> {
         status_code: None,
       })?,
   };
-  Ok(NatsKv { client, kv })
+  Ok(NatsKv { kv })
 }

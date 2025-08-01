@@ -48,6 +48,10 @@ pub enum Error {
   /// Enum kind error.
   #[error("Unknown {0}: {1}")]
   Unknown(EnumKind, String),
+
+  /// Invalid semantic version string
+  #[error(transparent)]
+  InvalidVersion(#[from] semver::Error),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

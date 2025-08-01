@@ -42,16 +42,14 @@ impl HttpToolRegistry {
   #[cfg(test)]
   pub fn from_env() -> Result<Self> {
     let base_url = env::var("SLIPSTREAM_BASE_URL").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_BASE_URL: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_BASE_URL: {e}"
+      )))
     })?;
     let api_key = env::var("SLIPSTREAM_API_KEY").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_API_KEY: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_API_KEY: {e}"
+      )))
     })?;
     Self::new(base_url, api_key.into())
   }
@@ -103,12 +101,7 @@ impl Registry for HttpToolRegistry {
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest error: {e}"),
-          ))
-        })?;
+        .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
       if !response.status().is_success() {
         let status = response.status();
@@ -117,7 +110,7 @@ impl Registry for HttpToolRegistry {
           .await
           .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(crate::Error::Registry {
-          reason: format!("Failed to update tool: HTTP {} - {}", status, body),
+          reason: format!("Failed to update tool: HTTP {status} - {body}"),
           status_code: Some(status.as_u16()),
         });
       }
@@ -125,7 +118,7 @@ impl Registry for HttpToolRegistry {
       // Create new tool
       let create_request = CreateToolRequest {
         name: subject.name,
-        version: subject.version,
+        version: subject.version.to_string(),
         provider: tool_ref.provider.to_string(),
         description: subject.description,
         arguments: subject
@@ -142,12 +135,7 @@ impl Registry for HttpToolRegistry {
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest error: {e}"),
-          ))
-        })?;
+        .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
       if !response.status().is_success() {
         let status = response.status();
@@ -156,7 +144,7 @@ impl Registry for HttpToolRegistry {
           .await
           .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(crate::Error::Registry {
-          reason: format!("Failed to create tool: HTTP {} - {}", status, body),
+          reason: format!("Failed to create tool: HTTP {status} - {body}"),
           status_code: Some(status.as_u16()),
         });
       }
@@ -193,12 +181,12 @@ impl Registry for HttpToolRegistry {
       self.base_url, tool_ref.provider, tool_ref.slug, version
     );
 
-    let response = self.client.delete(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .delete(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
     if response.status().is_success() {
       Ok(tool)
@@ -211,7 +199,7 @@ impl Registry for HttpToolRegistry {
         .await
         .unwrap_or_else(|_| "Unknown error".to_string());
       Err(crate::Error::Registry {
-        reason: format!("Failed to delete tool: HTTP {} - {}", status, body),
+        reason: format!("Failed to delete tool: HTTP {status} - {body}"),
         status_code: Some(status.as_u16()),
       })
     }
@@ -232,23 +220,18 @@ impl Registry for HttpToolRegistry {
       )
     };
 
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
     if response.status().is_success() {
       let envelope = response
         .json::<APIEnvelope<ToolDefinition>>()
         .await
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest JSON error: {e}"),
-          ))
-        })?;
+        .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest JSON error: {e}"))))?;
       Ok(Some(envelope.result))
     } else if response.status() == reqwest::StatusCode::NOT_FOUND {
       Ok(None)
@@ -259,7 +242,7 @@ impl Registry for HttpToolRegistry {
         .await
         .unwrap_or_else(|_| "Unknown error".to_string());
       Err(crate::Error::Registry {
-        reason: format!("Failed to get tool: HTTP {} - {}", status, body),
+        reason: format!("Failed to get tool: HTTP {status} - {body}"),
         status_code: Some(status.as_u16()),
       })
     }
@@ -281,12 +264,12 @@ impl Registry for HttpToolRegistry {
       )
     };
 
-    let response = self.client.head(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .head(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
     Ok(response.status().is_success())
   }
 
@@ -296,10 +279,10 @@ impl Registry for HttpToolRegistry {
     // Add query parameters for pagination
     let mut params = Vec::new();
     if let Some(page) = pagination.page {
-      params.push(format!("page={}", page));
+      params.push(format!("page={page}"));
     }
     if let Some(per_page) = pagination.per_page {
-      params.push(format!("per_page={}", per_page));
+      params.push(format!("per_page={per_page}"));
     }
 
     if !params.is_empty() {
@@ -307,12 +290,12 @@ impl Registry for HttpToolRegistry {
       url.push_str(&params.join("&"));
     }
 
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
     response
       .error_for_status_ref()
       .map_err(|e| crate::Error::Registry {
@@ -323,12 +306,7 @@ impl Registry for HttpToolRegistry {
     let envelope = response
       .json::<APIEnvelope<Vec<ToolDefinition>>>()
       .await
-      .map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("Reqwest JSON error: {e}"),
-        ))
-      })?;
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest JSON error: {e}"))))?;
     let tool_refs = envelope
       .result
       .into_iter()
@@ -357,7 +335,7 @@ mod tests {
       slug: format!("tool-{name}"),
       name: name.to_string(),
       description: Some(format!("Test tool {name}")),
-      version: "1.0.0".to_string(),
+      version: semver::Version::parse("1.0.0").unwrap(),
       arguments: Some(schema_for!(bool)),
       provider: ToolProvider::Local,
       created_at: None,
@@ -369,7 +347,7 @@ mod tests {
     ToolRef {
       provider: ToolProvider::Local,
       slug: format!("tool-{name}"),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     }
   }
 
@@ -398,7 +376,7 @@ mod tests {
       .has(tool_ref)
       .await
       .expect("Registry should be accessible");
-    assert_eq!(result, false);
+    assert!(!result);
   }
 
   #[tokio::test]
@@ -483,7 +461,7 @@ mod tests {
     let tool_ref = ToolRef {
       provider: ToolProvider::Local,
       slug: "tool-with-special/chars".to_string(),
-      version: Some("1.0.0-beta+build".to_string()),
+      version: Some(semver::Version::parse("1.0.0-beta+build").unwrap()),
     };
 
     // This would catch URL encoding bugs that cause 400s in production

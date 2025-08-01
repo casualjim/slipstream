@@ -25,16 +25,14 @@ impl HttpModelRegistry {
   #[cfg(test)]
   pub fn from_env() -> Result<Self> {
     let base_url = env::var("SLIPSTREAM_BASE_URL").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_BASE_URL: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_BASE_URL: {e}"
+      )))
     })?;
     let api_key = env::var("SLIPSTREAM_API_KEY").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_API_KEY: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_API_KEY: {e}"
+      )))
     })?;
     Self::new(base_url, api_key.into())
   }
@@ -61,23 +59,18 @@ impl Registry for HttpModelRegistry {
 
   async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
     let url = format!("{}/models/{}", self.base_url, name);
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
     if response.status().is_success() {
       let envelope = response
         .json::<APIEnvelope<ModelDefinition>>()
         .await
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest JSON error: {e}"),
-          ))
-        })?;
+        .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest JSON error: {e}"))))?;
       Ok(Some(envelope.result))
     } else if response.status() == reqwest::StatusCode::NOT_FOUND {
       Ok(None)
@@ -91,12 +84,12 @@ impl Registry for HttpModelRegistry {
 
   async fn has(&self, name: Self::Key) -> Result<bool> {
     let url = format!("{}/models/{}", self.base_url, name);
-    let response = self.client.head(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .head(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
     Ok(response.status().is_success())
   }
 
@@ -106,10 +99,10 @@ impl Registry for HttpModelRegistry {
     // Add query parameters for pagination
     let mut params = Vec::new();
     if let Some(page) = pagination.page {
-      params.push(format!("page={}", page));
+      params.push(format!("page={page}"));
     }
     if let Some(per_page) = pagination.per_page {
-      params.push(format!("per_page={}", per_page));
+      params.push(format!("per_page={per_page}"));
     }
 
     if !params.is_empty() {
@@ -117,12 +110,12 @@ impl Registry for HttpModelRegistry {
       url.push_str(&params.join("&"));
     }
 
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
     response
       .error_for_status_ref()
       .map_err(|e| crate::Error::Registry {
@@ -133,12 +126,7 @@ impl Registry for HttpModelRegistry {
     let envelope = response
       .json::<APIEnvelope<Vec<ModelDefinition>>>()
       .await
-      .map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("Reqwest JSON error: {e}"),
-        ))
-      })?;
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest JSON error: {e}"))))?;
 
     Ok(envelope.result.into_iter().map(|model| model.id).collect())
   }
@@ -206,14 +194,14 @@ mod tests {
       .has("non-existent-model".to_string())
       .await
       .expect("HTTP call should succeed");
-    assert_eq!(result, false);
+    assert!(!result);
 
     // Test has with a known model from seed data (should return true)
     let result = registry
       .has("google/gemini-2.5-flash".to_string())
       .await
       .expect("HTTP call should succeed");
-    assert_eq!(result, true);
+    assert!(result);
   }
 
   #[tokio::test]
@@ -242,9 +230,7 @@ mod tests {
     for expected_model in expected_models {
       assert!(
         keys.contains(&expected_model.to_string()),
-        "Expected model '{}' not found in keys: {:?}",
-        expected_model,
-        keys
+        "Expected model '{expected_model}' not found in keys: {keys:?}",
       );
     }
   }

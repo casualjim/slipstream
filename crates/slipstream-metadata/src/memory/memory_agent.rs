@@ -1,11 +1,10 @@
 use crate::{AgentDefinition, AgentRef};
 use crate::{Pagination, Registry, Result};
 use async_trait::async_trait;
-use semver::Version;
 
 #[derive(Debug, Clone)]
 pub struct MemoryAgentRegistry {
-  // Keyed by "slug" or "slug/version"; for versionless GET/HAS we consult the "latest" pointer
+  // Keyed by "slug/version"; for versionless GET/HAS we compute latest on demand
   store: dashmap::DashMap<String, AgentDefinition>,
 }
 
@@ -39,8 +38,6 @@ impl Registry for MemoryAgentRegistry {
     // Persist the concrete version record under "slug/version"
     let version_key = format!("{}/{}", name.slug, name.version.as_ref().unwrap());
     self.store.insert(version_key, subject.clone());
-    // Update "latest" pointer under "slug" to the provided subject
-    self.store.insert(name.slug.clone(), subject);
     Ok(())
   }
 
@@ -60,76 +57,48 @@ impl Registry for MemoryAgentRegistry {
       None
     };
 
-    // If we removed something and the "latest" points to the same version, recompute latest
-    if let Some(ref removed_subject) = removed {
-      if let Some(latest) = self.store.get(&name.slug) {
-        // if latest version matches removed version, recompute latest from remaining versions
-        if latest.version == removed_subject.version {
-          drop(latest);
-          // find remaining versions for this slug
-          let prefix = format!("{}/", name.slug);
-          let mut candidates: Vec<AgentDefinition> = self
-            .store
-            .iter()
-            .filter_map(|kv| {
-              let k = kv.key();
-              if k.starts_with(&prefix) {
-                Some(kv.value().clone())
-              } else {
-                None
-              }
-            })
-            .collect();
-          // Select latest by semantic version ordering; fall back to string compare on parse errors
-          candidates.sort_by(|a, b| {
-            match (
-              semver::Version::parse(&a.version),
-              semver::Version::parse(&b.version),
-            ) {
-              (Ok(va), Ok(vb)) => va.cmp(&vb),
-              _ => a.version.cmp(&b.version),
-            }
-          });
-          let new_latest = candidates.pop();
-          if let Some(def) = new_latest {
-            self.store.insert(name.slug.clone(), def);
-          } else {
-            // no remaining versions; remove latest pointer
-            let _ = self.store.remove(&name.slug);
-          }
-        }
-      }
-    }
-
     Ok(removed)
   }
 
-  /// Get supports versionless lookups: when version is None, return the latest (value under "slug").
+  /// Get supports versionless lookups: when version is None, compute latest by scanning slug/version keys.
   async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    let key = if let Some(v) = &name.version {
-      format!("{}/{}", name.slug, v)
-    } else {
-      name.slug.clone()
-    };
-    if let Some(subject) = self.store.get(&key) {
-      Ok(Some(subject.clone()))
-    } else {
-      Ok(None)
+    if let Some(v) = &name.version {
+      let key = format!("{}/{}", name.slug, v);
+      return Ok(self.store.get(&key).map(|v| v.clone()));
     }
+    // versionless: compute latest by semver ordering
+    let prefix = format!("{}/", name.slug);
+    let mut candidates: Vec<AgentDefinition> = self
+      .store
+      .iter()
+      .filter_map(|kv| {
+        let k = kv.key();
+        if k.starts_with(&prefix) {
+          Some(kv.value().clone())
+        } else {
+          None
+        }
+      })
+      .collect();
+    if candidates.is_empty() {
+      return Ok(None);
+    }
+    candidates.sort_by(|a, b| a.version.cmp(&b.version));
+    Ok(candidates.pop())
   }
 
-  /// Has supports versionless lookups: when version is None, check "slug" key for latest.
+  /// Has supports versionless lookups: when version is None, check if any slug/version exists.
   async fn has(&self, name: Self::Key) -> Result<bool> {
-    let key = if let Some(v) = &name.version {
-      format!("{}/{}", name.slug, v)
-    } else {
-      name.slug.clone()
-    };
-    Ok(self.store.contains_key(&key))
+    if let Some(v) = &name.version {
+      let key = format!("{}/{}", name.slug, v);
+      return Ok(self.store.contains_key(&key));
+    }
+    let prefix = format!("{}/", name.slug);
+    Ok(self.store.iter().any(|kv| kv.key().starts_with(&prefix)))
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
-    // Return all keys: latest pointers (plain "slug") and all versioned "slug/version" entries
+    // Return only versioned keys: "slug/version"
     let mut keys: Vec<String> = self.store.iter().map(|kv| kv.key().to_string()).collect();
 
     // Sort for consistent pagination
@@ -180,7 +149,7 @@ mod tests {
       name: name.to_string(),
       model: "gpt-4.1-nano".to_string(),
       description: Some(format!("Test agent {name}")),
-      version: "1.0.0".to_string(),
+      version: semver::Version::parse("1.0.0").unwrap(),
       slug: format!("agent-{name}"),
       available_tools: vec!["local/tool1/1.0.0".to_string()],
       instructions: "You are a helpful assistant".to_string(),
@@ -219,7 +188,7 @@ mod tests {
     // Test put another agent
     registry.put(key2.clone(), agent2.clone()).await.unwrap();
 
-    // Test keys (no pagination) should include both latest pointers and versioned keys
+    // Test keys (no pagination) should include only versioned keys
     let keys = registry
       .keys(Pagination {
         page: None,
@@ -228,8 +197,6 @@ mod tests {
       .await
       .unwrap();
     let mut expected_keys = vec![
-      agent1.slug.clone(),
-      agent2.slug.clone(),
       format!("{}/{}", agent1.slug, agent1.version),
       format!("{}/{}", agent2.slug, agent2.version),
     ];
@@ -278,11 +245,11 @@ mod tests {
     let registry = create_registry();
     // two versions for same slug, latest should end up as higher semver
     let mut v1 = create_test_agent("ver-agent");
-    v1.version = "1.0.0".to_string();
+    v1.version = semver::Version::parse("1.0.0").unwrap();
     v1.slug = "ver-agent".to_string();
 
     let mut v2 = v1.clone();
-    v2.version = "1.1.0".to_string();
+    v2.version = semver::Version::parse("1.1.0").unwrap();
 
     // put v1 then v2
     registry.put(AgentRef::from(&v1), v1.clone()).await.unwrap();
@@ -293,7 +260,10 @@ mod tests {
       .get(AgentRef::builder().slug("ver-agent").build())
       .await
       .unwrap();
-    assert_eq!(latest.unwrap().version, "1.1.0");
+    assert_eq!(
+      latest.unwrap().version,
+      semver::Version::parse("1.1.0").unwrap()
+    );
 
     // versionless HAS should be true
     let has_latest = registry
@@ -307,7 +277,7 @@ mod tests {
       .del(
         AgentRef::builder()
           .slug("ver-agent")
-          .version("1.1.0")
+          .version(semver::Version::parse("1.1.0").unwrap())
           .build(),
       )
       .await
@@ -316,7 +286,10 @@ mod tests {
       .get(AgentRef::builder().slug("ver-agent").build())
       .await
       .unwrap();
-    assert_eq!(latest_after.unwrap().version, "1.0.0");
+    assert_eq!(
+      latest_after.unwrap().version,
+      semver::Version::parse("1.0.0").unwrap()
+    );
   }
 
   #[tokio::test]
@@ -324,11 +297,11 @@ mod tests {
     let registry = create_registry();
     // two versions for same slug, latest should end up as higher semver
     let mut v1 = create_test_agent("ver-agent");
-    v1.version = "1.0.0".to_string();
+    v1.version = semver::Version::parse("1.0.0").unwrap();
     v1.slug = "ver-agent".to_string();
 
     let mut v2 = v1.clone();
-    v2.version = "1.1.0".to_string();
+    v2.version = semver::Version::parse("1.1.0").unwrap();
 
     // put v1 then v2
     registry.put(AgentRef::from(&v1), v1.clone()).await.unwrap();
@@ -339,7 +312,10 @@ mod tests {
       .get(AgentRef::builder().slug("ver-agent").build())
       .await
       .unwrap();
-    assert_eq!(latest.unwrap().version, "1.1.0");
+    assert_eq!(
+      latest.unwrap().version,
+      semver::Version::parse("1.1.0").unwrap()
+    );
 
     // versionless has should be true
     let has_latest = registry
@@ -353,7 +329,7 @@ mod tests {
       .del(
         AgentRef::builder()
           .slug("ver-agent")
-          .version("1.1.0")
+          .version(semver::Version::parse("1.1.0").unwrap())
           .build(),
       )
       .await
@@ -362,7 +338,10 @@ mod tests {
       .get(AgentRef::builder().slug("ver-agent").build())
       .await
       .unwrap();
-    assert_eq!(latest_after.unwrap().version, "1.0.0");
+    assert_eq!(
+      latest_after.unwrap().version,
+      semver::Version::parse("1.0.0").unwrap()
+    );
   }
 
   #[tokio::test]

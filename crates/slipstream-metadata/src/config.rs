@@ -28,10 +28,9 @@ pub enum Config {
 impl Config {
   pub fn from_env() -> Result<Self> {
     let base_url = std::env::var("SLIPSTREAM_BASE_URL").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_BASE_URL: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_BASE_URL: {e}"
+      )))
     })?;
     let api_key = std::env::var("SLIPSTREAM_API_KEY")
       .ok()

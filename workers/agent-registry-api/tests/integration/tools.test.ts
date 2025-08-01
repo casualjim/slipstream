@@ -21,7 +21,7 @@ describe("Tool API Integration Tests", () => {
           provider: "Local",
         }),
       });
-      const body = await response.json() as { success: boolean; errors: { message: string }[] };
+      const body = (await response.json()) as { success: boolean; errors: { message: string }[] };
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -82,7 +82,7 @@ describe("Tool API Integration Tests", () => {
         },
         body: JSON.stringify(toolData),
       });
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -104,7 +104,7 @@ describe("Tool API Integration Tests", () => {
         },
         body: JSON.stringify(toolData),
       });
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -131,7 +131,7 @@ describe("Tool API Integration Tests", () => {
         for (const version of validVersions) {
           const toolData = {
             name: `Test Tool ${version}`,
-            slug: `test-tool-${version.replace(/[^a-zA-Z0-9]/g, '-')}`,
+            slug: `test-tool-${version.replace(/[^a-zA-Z0-9]/g, "-")}`,
             version,
             provider: "Local",
           };
@@ -156,7 +156,7 @@ describe("Tool API Integration Tests", () => {
         for (const version of invalidVersions) {
           const toolData = {
             name: `Test Tool ${version || "empty"}`,
-            slug: `test-tool-${version.replace(/[^a-zA-Z0-9]/g, '-') || "empty"}`,
+            slug: `test-tool-${version.replace(/[^a-zA-Z0-9]/g, "-") || "empty"}`,
             version,
             provider: "Local",
           };
@@ -253,7 +253,7 @@ describe("Tool API Integration Tests", () => {
   describe("GET /api/v1/tools", () => {
     it("should return 401 without authorization", async () => {
       const response = await SELF.fetch(`http://local.test/api/v1/tools`);
-      const body = await response.json() as { success: boolean; errors: { message: string }[] };
+      const body = (await response.json()) as { success: boolean; errors: { message: string }[] };
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -352,7 +352,7 @@ describe("Tool API Integration Tests", () => {
         }
 
         const countResult = await env.DB.prepare("SELECT COUNT(*) AS count FROM tools").first();
-        totalToolsCount = countResult?.count as number || 0;
+        totalToolsCount = (countResult?.count as number) || 0;
       });
 
       it("should support basic pagination with page and per_page", async () => {
@@ -527,7 +527,7 @@ describe("Tool API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json() as { success: boolean; errors: { message: string }[] };
+      const body = (await response.json()) as { success: boolean; errors: { message: string }[] };
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -599,7 +599,7 @@ describe("Tool API Integration Tests", () => {
         },
         body: JSON.stringify({ description: "New description" }),
       });
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -636,7 +636,7 @@ describe("Tool API Integration Tests", () => {
           },
         },
       );
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
 
       expect(response.status).toBe(200);
       expect(body.success).toBe(true);
@@ -660,7 +660,7 @@ describe("Tool API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -955,8 +955,18 @@ describe("Tool API Integration Tests", () => {
       // Create versions with build metadata
       const toolVersions = [
         { name: "Build Metadata Test Tool", slug: "build-metadata-test-tool", version: "1.0.0", provider: "Local" },
-        { name: "Build Metadata Test Tool", slug: "build-metadata-test-tool", version: "1.0.0+build.1", provider: "Local" },
-        { name: "Build Metadata Test Tool", slug: "build-metadata-test-tool", version: "1.0.0+build.2", provider: "Local" },
+        {
+          name: "Build Metadata Test Tool",
+          slug: "build-metadata-test-tool",
+          version: "1.0.0+build.1",
+          provider: "Local",
+        },
+        {
+          name: "Build Metadata Test Tool",
+          slug: "build-metadata-test-tool",
+          version: "1.0.0+build.2",
+          provider: "Local",
+        },
       ];
 
       for (const toolData of toolVersions) {

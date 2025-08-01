@@ -1,6 +1,6 @@
 use crate::{Pagination, Registry, Result, ToolDefinition, ToolRef};
 use async_trait::async_trait;
-use futures::{TryStreamExt as _, stream::StreamExt};
+use futures::stream::StreamExt;
 
 use crate::nats::setup::{NatsKv, create_kv_bucket};
 
@@ -11,7 +11,7 @@ pub struct NatsToolRegistry {
 
 impl NatsToolRegistry {
   pub async fn new(bucket_prefix: &str) -> Result<Self> {
-    let bucket_name = format!("{}-tools", bucket_prefix);
+    let bucket_name = format!("{bucket_prefix}-tools");
     let inner = create_kv_bucket(&bucket_name).await?;
     Ok(Self { inner })
   }
@@ -19,7 +19,7 @@ impl NatsToolRegistry {
 
 // Helper: list versioned keys "provider/slug/<version>" (exactly two '/')
 async fn list_versioned_keys(inner: &NatsKv, provider: &str, slug: &str) -> Result<Vec<String>> {
-  let prefix = format!("{}/{}/", provider, slug);
+  let prefix = format!("{provider}/{slug}/");
   Ok(
     inner
       .kv
@@ -141,7 +141,7 @@ impl Registry for NatsToolRegistry {
       name.slug
     );
     let key = if let Some(v) = &name.version {
-      format!("{}/{}", base, v)
+      format!("{base}/{v}")
     } else {
       match resolve_latest_semver_key(
         &self.inner,
@@ -183,7 +183,7 @@ impl Registry for NatsToolRegistry {
       name.slug
     );
     if let Some(v) = &name.version {
-      let key = format!("{}/{}", base, v);
+      let key = format!("{base}/{v}");
       let entry = self
         .inner
         .kv
@@ -249,7 +249,7 @@ mod tests {
     ToolDefinition::builder()
       .slug(name)
       .name(name)
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .provider(crate::definitions::ToolProvider::Local)
       .description("A test tool")
       .build()
@@ -263,19 +263,19 @@ mod tests {
     let base = "nats-ver-tool";
     let mut t1 = create_test_tool(base);
     t1.slug = base.to_string();
-    t1.version = "1.0.0".to_string();
+    t1.version = semver::Version::parse("1.0.0").unwrap();
     let mut t2 = t1.clone();
-    t2.version = "2.0.0".to_string();
+    t2.version = semver::Version::parse("2.0.0").unwrap();
 
     let r1 = ToolRef::builder()
       .slug(base)
       .provider(crate::definitions::ToolProvider::Local)
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .build();
     let r2 = ToolRef::builder()
       .slug(base)
       .provider(crate::definitions::ToolProvider::Local)
-      .version("2.0.0")
+      .version(semver::Version::parse("2.0.0").unwrap())
       .build();
 
     let _ = registry.del(r1.clone()).await;
@@ -293,7 +293,10 @@ mod tests {
       )
       .await
       .unwrap();
-    assert_eq!(latest.unwrap().version, "2.0.0");
+    assert_eq!(
+      latest.unwrap().version,
+      semver::Version::parse("2.0.0").unwrap()
+    );
 
     let _ = registry.del(r2.clone()).await.unwrap();
     let latest_after = registry
@@ -305,7 +308,10 @@ mod tests {
       )
       .await
       .unwrap();
-    assert_eq!(latest_after.unwrap().version, "1.0.0");
+    assert_eq!(
+      latest_after.unwrap().version,
+      semver::Version::parse("1.0.0").unwrap()
+    );
   }
 
   #[tokio::test]

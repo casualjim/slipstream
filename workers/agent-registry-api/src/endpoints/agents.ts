@@ -393,8 +393,6 @@ export class GetLatestAgent extends D1ReadEndpoint<HandleArgs> {
     pathParameters: ["slug"], // Only slug, no version
   };
 
-
-
   // Override to handle fetching the latest version
   async fetch(filters: any) {
     if (!filters.filters || filters.filters.length === 0) {
@@ -436,4 +434,3 @@ export class GetLatestAgent extends D1ReadEndpoint<HandleArgs> {
     return agent;
   }
 }
-

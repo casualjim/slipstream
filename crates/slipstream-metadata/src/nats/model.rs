@@ -10,7 +10,7 @@ pub struct NatsModelRegistry {
 
 impl NatsModelRegistry {
   pub async fn new(bucket_prefix: &str) -> Result<Self> {
-    let bucket_name = format!("{}-models", bucket_prefix);
+    let bucket_name = format!("{bucket_prefix}-models");
     let inner = create_kv_bucket(&bucket_name).await?;
     Ok(Self { inner })
   }

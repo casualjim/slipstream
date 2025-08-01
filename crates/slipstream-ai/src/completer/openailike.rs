@@ -406,6 +406,7 @@ mod tests {
   #[derive(Debug)]
   struct TestAgent {
     name: String,
+    version: semver::Version,
     tools: Vec<&'static AgentTool>,
     model: CompleterConfig,
     response_schema: Option<schemars::Schema>,
@@ -415,6 +416,7 @@ mod tests {
     fn new() -> Self {
       Self {
         name: "test_agent".to_string(),
+        version: semver::Version::parse("0.1.0").unwrap(),
         tools: vec![],
         model: CompleterConfig {
           provider: "test".to_string(),
@@ -432,8 +434,8 @@ mod tests {
       &self.name
     }
 
-    fn version(&self) -> &str {
-      "0.1.0"
+    fn version(&self) -> &semver::Version {
+      &self.version
     }
 
     fn instructions(&self) -> InstructionsMessage {
@@ -537,6 +539,7 @@ mod tests {
 
     let agent = std::sync::Arc::new(TestAgent {
       name: agent.name,
+      version: agent.version,
       tools: agent.tools,
       model: agent.model,
       response_schema: Some(schema),
@@ -577,6 +580,7 @@ mod tests {
     // Create an agent with tools
     let agent = std::sync::Arc::new(TestAgent {
       name: "test_agent".to_string(),
+      version: semver::Version::parse("0.1.0").unwrap(),
       tools: vec![tool],
       model: CompleterConfig {
         provider: "test".to_string(),
@@ -683,6 +687,7 @@ mod tests {
     // Create an agent with multiple tools
     let agent = std::sync::Arc::new(TestAgent {
       name: "test_agent".to_string(),
+      version: semver::Version::parse("0.1.0").unwrap(),
       tools: vec![complex_tool, simple_tool],
       model: CompleterConfig {
         provider: "test".to_string(),
@@ -793,6 +798,7 @@ mod tests {
 
     let agent = std::sync::Arc::new(TestAgent {
       name: "test_agent".to_string(),
+      version: semver::Version::parse("0.1.0").unwrap(),
       tools: vec![],
       model: CompleterConfig {
         provider: "test".to_string(),

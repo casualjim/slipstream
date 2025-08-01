@@ -156,7 +156,10 @@ export class AgentService {
 
     // Debug: log all candidate versions
     try {
-      console.log("[AgentService.getLatestBySlug] candidates:", agents.map(a => a.version));
+      console.log(
+        "[AgentService.getLatestBySlug] candidates:",
+        agents.map((a) => a.version),
+      );
     } catch {}
 
     if (agents.length === 0) {
@@ -194,9 +197,9 @@ export class AgentService {
     try {
       console.log(
         "[AgentService.getLatestBySlug] stable:",
-        stable.map(a => a.version),
+        stable.map((a) => a.version),
         "prerelease:",
-        prerelease.map(a => a.version),
+        prerelease.map((a) => a.version),
         "chosen:",
         chosen?.version,
       );

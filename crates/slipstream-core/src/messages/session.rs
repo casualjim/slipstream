@@ -184,21 +184,25 @@ impl Aggregator {
 
   /// Returns an iterator over all but the last message in the aggregator
   /// and a reference to the last message.
+  ///
+  /// This method returns a pair consisting of:
+  /// - An iterator over the "history" (all messages except the last one)
+  /// - An optional reference to the last message (if any)
+  ///
+  /// Using a concrete iterator type instead of a boxed trait object reduces
+  /// type complexity and avoids Clippy's `type_complexity` warning.
   pub fn history_iter_and_last_message(
     &self,
   ) -> (
-    Box<dyn Iterator<Item = &Message<ModelMessage>> + '_>,
+    std::slice::Iter<'_, Message<ModelMessage>>,
     Option<&Message<ModelMessage>>,
   ) {
     if self.messages.is_empty() {
-      return (Box::new(std::iter::empty()), None);
+      return (self.messages[..0].iter(), None);
     }
 
     let last_idx = self.messages.len() - 1;
-    (
-      Box::new(self.messages[..last_idx].iter()),
-      self.messages.last(),
-    )
+    (self.messages[..last_idx].iter(), self.messages.last())
   }
 
   /// Adds any message type to the aggregator.
@@ -284,7 +288,8 @@ impl Aggregator {
   /// - A new unique ID
   /// - A copy of all current messages
   /// - An init_len set to the current message count
-  /// This allows for parallel processing of message streams that can be joined later.
+  ///
+  ///   This allows for parallel processing of message streams that can be joined later.
   pub fn fork(&self) -> Self {
     Self {
       id: Uuid::now_v7(),

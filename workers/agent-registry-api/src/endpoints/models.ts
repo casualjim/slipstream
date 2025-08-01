@@ -60,7 +60,7 @@ const modelMeta = {
  */
 export class GetModel extends D1ReadEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "Get a specific Model",
     description: "Retrieves a single model by its ID from the registry",
     ...modelMeta,
@@ -92,7 +92,7 @@ _meta = {
  */
 export class ListModels extends D1ListEndpoint<HandleArgs> {
   // @ts-expect-error - chanfana has poor type definitions
-_meta = {
+  _meta = {
     summary: "List all Models",
     description: "Retrieves a list of all models in the registry",
     ...modelMeta,

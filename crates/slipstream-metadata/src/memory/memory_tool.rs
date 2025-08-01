@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 #[derive(Debug, Clone)]
 pub struct MemoryToolRegistry {
-  // Keyed by "provider/slug" for latest pointer and "provider/slug/version" for concrete versions
+  // Keyed by "provider/slug/version" for concrete versions
   store: dashmap::DashMap<String, ToolDefinition>,
 }
 
@@ -45,8 +45,6 @@ impl Registry for MemoryToolRegistry {
     );
     let versioned_key = format!("{}/{}", base, name.version.as_ref().unwrap());
     self.store.insert(versioned_key, subject.clone());
-    // Update "latest" pointer at "provider/slug"
-    self.store.insert(base, subject);
     Ok(())
   }
 
@@ -70,84 +68,54 @@ impl Registry for MemoryToolRegistry {
     } else {
       None
     };
-
-    if let Some(ref removed_def) = removed {
-      if let Some(latest) = self.store.get(&base) {
-        if latest.version == removed_def.version {
-          drop(latest);
-          // recompute latest from remaining versions
-          let prefix = format!(
-            "{}/{}",
-            AsRef::<str>::as_ref(&name.provider).to_lowercase(),
-            name.slug
-          ) + "/";
-          let mut candidates: Vec<ToolDefinition> = self
-            .store
-            .iter()
-            .filter_map(|kv| {
-              let k = kv.key();
-              if k.starts_with(&prefix) {
-                Some(kv.value().clone())
-              } else {
-                None
-              }
-            })
-            .collect();
-          candidates.sort_by(|a, b| {
-            let parse = |v: &str| {
-              v.split('.')
-                .map(|s| s.parse::<u64>().unwrap_or(0))
-                .collect::<Vec<u64>>()
-            };
-            let av = parse(&a.version);
-            let bv = parse(&b.version);
-            av.cmp(&bv)
-          });
-          let new_latest = candidates.pop();
-          if let Some(def) = new_latest {
-            self.store.insert(base.clone(), def);
-          } else {
-            let _ = self.store.remove(&base);
-          }
-        }
-      }
-    }
-
     Ok(removed)
   }
 
-  /// Get supports versionless lookups: when version is None, return latest at "provider/slug"
+  /// Get supports versionless lookups: when version is None, compute latest by scanning "provider/slug/*"
   async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
     let base = format!(
       "{}/{}",
       AsRef::<str>::as_ref(&name.provider).to_lowercase(),
       name.slug
     );
-    let key = if let Some(v) = &name.version {
-      format!("{}/{}", base, v)
-    } else {
-      base
-    };
-    if let Some(subject) = self.store.get(&key) {
-      Ok(Some(subject.clone()))
-    } else {
-      Ok(None)
+    if let Some(v) = &name.version {
+      let key = format!("{base}/{v}");
+      return Ok(self.store.get(&key).map(|v| v.clone()));
     }
+    // versionless: compute latest by semver ordering across versioned entries
+    let prefix = format!("{base}/");
+    let mut candidates: Vec<ToolDefinition> = self
+      .store
+      .iter()
+      .filter_map(|kv| {
+        let k = kv.key();
+        if k.starts_with(&prefix) {
+          Some(kv.value().clone())
+        } else {
+          None
+        }
+      })
+      .collect();
+    if candidates.is_empty() {
+      return Ok(None);
+    }
+    candidates.sort_by(|a, b| a.version.cmp(&b.version));
+    Ok(candidates.pop())
   }
 
-  /// Has supports versionless lookups: when version is None, check "provider/slug"
+  /// Has supports versionless lookups: when version is None, check if any "provider/slug/*" exists
   async fn has(&self, name: Self::Key) -> Result<bool> {
     let base = format!(
       "{}/{}",
       AsRef::<str>::as_ref(&name.provider).to_lowercase(),
       name.slug
     );
-    let key = if let Some(v) = &name.version {
-      format!("{}/{}", base, v)
-    } else {
-      base
-    };
-    Ok(self.store.contains_key(&key))
+    if let Some(v) = &name.version {
+      let key = format!("{base}/{v}");
+      return Ok(self.store.contains_key(&key));
+    }
+    let prefix = format!("{base}/");
+    Ok(self.store.iter().any(|kv| kv.key().starts_with(&prefix)))
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
@@ -189,7 +157,7 @@ mod tests {
       slug: format!("tool-{name}"),
       name: name.to_string(),
       description: Some(format!("Test tool {name}")),
-      version: "1.0.0".to_string(),
+      version: semver::Version::parse("1.0.0").unwrap(),
       arguments: Some(schema_for!(bool)),
       provider: ToolProvider::Local,
       created_at: None,
@@ -213,7 +181,7 @@ mod tests {
     let tool1_ref = ToolRef {
       provider: ToolProvider::Local,
       slug: "tool1".to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     };
     registry
       .put(tool1_ref.clone(), tool1.clone())
@@ -230,7 +198,7 @@ mod tests {
     let nonexistent_ref = ToolRef {
       provider: ToolProvider::Local,
       slug: "nonexistent".to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     };
     assert!(!registry.has(nonexistent_ref).await.unwrap());
 
@@ -238,14 +206,14 @@ mod tests {
     let tool2_ref = ToolRef {
       provider: ToolProvider::Local,
       slug: "tool2".to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     };
     registry
       .put(tool2_ref.clone(), tool2.clone())
       .await
       .unwrap();
 
-    // Test keys (no pagination): expect both latest pointers and versioned keys
+    // Test keys (no pagination): expect only versioned keys (no latest pointers)
     let keys = registry
       .keys(Pagination {
         page: None,
@@ -253,12 +221,7 @@ mod tests {
       })
       .await
       .unwrap();
-    let mut expected_keys = vec![
-      "local/tool1".to_string(),
-      "local/tool2".to_string(),
-      tool1_ref.to_string(),
-      tool2_ref.to_string(),
-    ];
+    let mut expected_keys = vec![tool1_ref.to_string(), tool2_ref.to_string()];
     expected_keys.sort();
     assert_eq!(keys, expected_keys);
 
@@ -277,7 +240,7 @@ mod tests {
     let nonexistent_ref = ToolRef {
       provider: ToolProvider::Local,
       slug: "nonexistent".to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     };
     let deleted = registry.del(nonexistent_ref).await.unwrap();
     assert!(deleted.is_none());
@@ -293,7 +256,7 @@ mod tests {
       let tool_ref = ToolRef {
         provider: ToolProvider::Local,
         slug: format!("tool{i:02}"),
-        version: Some("1.0.0".to_string()),
+        version: Some(semver::Version::parse("1.0.0").unwrap()),
       };
       registry.put(tool_ref, tool).await.unwrap();
     }
@@ -306,8 +269,8 @@ mod tests {
       })
       .await
       .unwrap();
-    // keys() returns both latest pointers and versioned keys, with 10 tools and 1 version each => 20
-    assert_eq!(all_keys.len(), 20);
+    // keys() returns only versioned keys, with 10 tools and 1 version each => 10
+    assert_eq!(all_keys.len(), 10);
     assert!(all_keys.windows(2).all(|w| w[0] <= w[1])); // Should be sorted
 
     // Test limit only
@@ -369,18 +332,18 @@ mod tests {
       .unwrap();
     assert_eq!(page_out_of_range, Vec::<String>::new());
 
-    // Test last page with partial results for per_page=4 over 20 total keys (latest + versioned)
+    // Test last page with partial results for per_page=4 over 10 total keys (only versioned)
     let last_partial = registry
       .keys(Pagination {
-        page: Some(5), // 5th page of 4-per-page over 20 entries -> last 4 entries
+        page: Some(3), // 3rd page of 4-per-page over 10 entries -> last 2 entries
         per_page: Some(4),
       })
       .await
       .unwrap();
-    assert_eq!(last_partial.len(), 4);
+    assert_eq!(last_partial.len(), 2);
     assert!(last_partial.windows(2).all(|w| w[0] <= w[1]));
 
-    // Test page 1 with large per_page (should return all 20 keys now)
+    // Test page 1 with large per_page (should return all 10 keys now)
     let large_limit = registry
       .keys(Pagination {
         page: Some(1),
@@ -388,7 +351,7 @@ mod tests {
       })
       .await
       .unwrap();
-    assert_eq!(large_limit.len(), 20);
+    assert_eq!(large_limit.len(), 10);
     // Check that every toolXX appears at least in some key
     for i in 1..=10 {
       let expected = format!("tool{i:02}");
@@ -408,11 +371,11 @@ mod tests {
     for i in 0..10 {
       let reg = registry.clone();
       tasks.spawn(async move {
-        let tool = create_test_tool(&format!("concurrent_tool_{}", i));
+        let tool = create_test_tool(&format!("concurrent_tool_{i}"));
         let tool_ref = ToolRef {
           provider: ToolProvider::Local,
-          slug: format!("concurrent_tool_{}", i),
-          version: Some("1.0.0".to_string()),
+          slug: format!("concurrent_tool_{i}"),
+          version: Some(semver::Version::parse("1.0.0").unwrap()),
         };
         reg.put(tool_ref, tool).await.unwrap();
       });
@@ -427,8 +390,8 @@ mod tests {
     for i in 0..10 {
       let tool_ref = ToolRef {
         provider: ToolProvider::Local,
-        slug: format!("concurrent_tool_{}", i),
-        version: Some("1.0.0".to_string()),
+        slug: format!("concurrent_tool_{i}"),
+        version: Some(semver::Version::parse("1.0.0").unwrap()),
       };
       assert!(registry.has(tool_ref).await.unwrap());
     }
@@ -440,8 +403,8 @@ mod tests {
       read_tasks.spawn(async move {
         let tool_ref = ToolRef {
           provider: ToolProvider::Local,
-          slug: format!("concurrent_tool_{}", i),
-          version: Some("1.0.0".to_string()),
+          slug: format!("concurrent_tool_{i}"),
+          version: Some(semver::Version::parse("1.0.0").unwrap()),
         };
         let tool = reg.get(tool_ref).await.unwrap();
         assert!(tool.is_some());
@@ -482,20 +445,20 @@ mod tests {
     let base = "ver-tool";
     let mut t1 = create_test_tool(base);
     t1.slug = base.to_string();
-    t1.version = "1.0.0".to_string();
+    t1.version = semver::Version::parse("1.0.0").unwrap();
 
     let mut t2 = t1.clone();
-    t2.version = "1.2.0".to_string();
+    t2.version = semver::Version::parse("1.2.0").unwrap();
 
     let tref1 = ToolRef {
       provider: ToolProvider::Local,
       slug: base.to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     };
     let tref2 = ToolRef {
       provider: ToolProvider::Local,
       slug: base.to_string(),
-      version: Some("1.2.0".to_string()),
+      version: Some(semver::Version::parse("1.2.0").unwrap()),
     };
 
     registry.put(tref1.clone(), t1.clone()).await.unwrap();
@@ -510,7 +473,10 @@ mod tests {
       })
       .await
       .unwrap();
-    assert_eq!(latest.unwrap().version, "1.2.0");
+    assert_eq!(
+      latest.unwrap().version,
+      semver::Version::parse("1.2.0").unwrap()
+    );
 
     // delete 1.2.0 and ensure fallback
     let _ = registry.del(tref2.clone()).await.unwrap();
@@ -522,7 +488,10 @@ mod tests {
       })
       .await
       .unwrap();
-    assert_eq!(latest_after.unwrap().version, "1.0.0");
+    assert_eq!(
+      latest_after.unwrap().version,
+      semver::Version::parse("1.0.0").unwrap()
+    );
   }
 
   #[tokio::test]
@@ -530,12 +499,12 @@ mod tests {
     let registry = create_registry();
     let tool1_v1 = create_test_tool("tool1");
     let mut tool1_v2 = create_test_tool("tool1");
-    tool1_v2.version = "2.0.0".to_string();
+    tool1_v2.version = semver::Version::parse("2.0.0").unwrap();
 
     let tool_ref = ToolRef {
       provider: ToolProvider::Local,
       slug: "tool1".to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(semver::Version::parse("1.0.0").unwrap()),
     };
 
     // Put initial version
@@ -549,7 +518,7 @@ mod tests {
 
     // Verify updated version is retrieved
     let retrieved = registry.get(tool_ref).await.unwrap().unwrap();
-    assert_eq!(retrieved.version, "2.0.0");
+    assert_eq!(retrieved.version, semver::Version::parse("2.0.0").unwrap());
   }
 
   #[tokio::test]

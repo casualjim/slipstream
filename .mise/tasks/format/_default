@@ -9,6 +9,7 @@ echo "✨ Starting Slipstream code formatting..."
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
+mise sort-deps
 mise format:js
 mise format:rust
 

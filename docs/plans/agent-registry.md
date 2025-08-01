@@ -1,5 +1,14 @@
 # Agent Registry API Implementation
 
+## Versioning and Ordering (Updated)
+
+- Internal version type is `semver::Version` (with serde) for strict SemVer parsing and comparison.
+- Wire format (HTTP/NATS/JSON): versions are serialized as strings and validated as SemVer at boundaries.
+- Ordering follows SemVer rules, including prerelease precedence.
+- Where Option<Version> is involved, ordering policy is `None < Some(Version)`.
+- Memory registries do not maintain “latest” pointers:
+  - For versionless GET/HAS, “latest” is computed on demand by scanning `slug/version` (agents) or `provider/slug/version` (tools) entries and selecting the highest SemVer.
+
 ## Version Handling Overview
 
 For both Agents and Tools:

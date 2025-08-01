@@ -49,16 +49,14 @@ impl HttpAgentRegistry {
   #[cfg(test)]
   pub fn from_env() -> Result<Self> {
     let base_url = env::var("SLIPSTREAM_BASE_URL").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_BASE_URL: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_BASE_URL: {e}"
+      )))
     })?;
     let api_key = env::var("SLIPSTREAM_API_KEY").map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Missing SLIPSTREAM_API_KEY: {e}"),
-      ))
+      crate::Error::Io(std::io::Error::other(format!(
+        "Missing SLIPSTREAM_API_KEY: {e}"
+      )))
     })?;
     Self::new(base_url, api_key.into())
   }
@@ -106,12 +104,7 @@ impl Registry for HttpAgentRegistry {
       .header("Content-Type", "application/json")
       .send()
       .await
-      .map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("Reqwest error: {e}"),
-        ))
-      })?;
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
     if response.status().is_success() {
       return Ok(());
@@ -119,7 +112,7 @@ impl Registry for HttpAgentRegistry {
       // Try create
       let create_request = CreateAgentRequest {
         name: subject.name.clone(),
-        version: subject.version.clone(),
+        version: subject.version.to_string(),
         description: subject.description.clone(),
         model: subject.model.clone(),
         instructions: Some(subject.instructions.clone()),
@@ -135,12 +128,7 @@ impl Registry for HttpAgentRegistry {
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest error: {e}"),
-          ))
-        })?;
+        .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
       if create_response.status().is_success() {
         return Ok(());
@@ -151,7 +139,7 @@ impl Registry for HttpAgentRegistry {
           .await
           .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(crate::Error::Registry {
-          reason: format!("Failed to create agent: HTTP {} - {}", status, body),
+          reason: format!("Failed to create agent: HTTP {status} - {body}"),
           status_code: Some(status.as_u16()),
         });
       }
@@ -162,7 +150,7 @@ impl Registry for HttpAgentRegistry {
         .await
         .unwrap_or_else(|_| "Unknown error".to_string());
       return Err(crate::Error::Registry {
-        reason: format!("Failed to update agent: HTTP {} - {}", status, body),
+        reason: format!("Failed to update agent: HTTP {status} - {body}"),
         status_code: Some(status.as_u16()),
       });
     }
@@ -195,12 +183,12 @@ impl Registry for HttpAgentRegistry {
       key.slug,
       key.version.as_ref().unwrap()
     );
-    let response = self.client.delete(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .delete(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
     if response.status().is_success() {
       Ok(agent)
@@ -213,7 +201,7 @@ impl Registry for HttpAgentRegistry {
         .await
         .unwrap_or_else(|_| "Unknown error".to_string());
       Err(crate::Error::Registry {
-        reason: format!("Failed to delete agent: HTTP {} - {}", status, body),
+        reason: format!("Failed to delete agent: HTTP {status} - {body}"),
         status_code: Some(status.as_u16()),
       })
     }
@@ -226,23 +214,18 @@ impl Registry for HttpAgentRegistry {
     } else {
       format!("{}/agents/{}", self.base_url, key.slug)
     };
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
 
     if response.status().is_success() {
       let envelope = response
         .json::<APIEnvelope<AgentDefinition>>()
         .await
-        .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest JSON error: {e}"),
-          ))
-        })?;
+        .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest JSON error: {e}"))))?;
       Ok(Some(envelope.result))
     } else if response.status() == reqwest::StatusCode::NOT_FOUND {
       Ok(None)
@@ -253,7 +236,7 @@ impl Registry for HttpAgentRegistry {
         .await
         .unwrap_or_else(|_| "Unknown error".to_string());
       Err(crate::Error::Registry {
-        reason: format!("Failed to get agent: HTTP {} - {}", status, body),
+        reason: format!("Failed to get agent: HTTP {status} - {body}"),
         status_code: Some(status.as_u16()),
       })
     }
@@ -267,12 +250,12 @@ impl Registry for HttpAgentRegistry {
       format!("{}/agents/{}", self.base_url, key.slug)
     };
 
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
     Ok(response.status().is_success())
   }
 
@@ -282,10 +265,10 @@ impl Registry for HttpAgentRegistry {
     // Add query parameters for pagination
     let mut params = Vec::new();
     if let Some(page) = pagination.page {
-      params.push(format!("page={}", page));
+      params.push(format!("page={page}"));
     }
     if let Some(per_page) = pagination.per_page {
-      params.push(format!("per_page={}", per_page));
+      params.push(format!("per_page={per_page}"));
     }
 
     if !params.is_empty() {
@@ -293,12 +276,12 @@ impl Registry for HttpAgentRegistry {
       url.push_str(&params.join("&"));
     }
 
-    let response = self.client.get(&url).send().await.map_err(|e| {
-      crate::Error::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("Reqwest error: {e}"),
-      ))
-    })?;
+    let response = self
+      .client
+      .get(&url)
+      .send()
+      .await
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest error: {e}"))))?;
     response
       .error_for_status_ref()
       .map_err(|e| crate::Error::Registry {
@@ -309,12 +292,7 @@ impl Registry for HttpAgentRegistry {
     let envelope = response
       .json::<APIEnvelope<Vec<AgentDefinition>>>()
       .await
-      .map_err(|e| {
-        crate::Error::Io(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          format!("Reqwest JSON error: {e}"),
-        ))
-      })?;
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("Reqwest JSON error: {e}"))))?;
     let agent_keys = envelope
       .result
       .into_iter()
@@ -334,12 +312,12 @@ mod tests {
   async fn generate_slug(name: &str) -> String {
     let base_url = std::env::var("SLIPSTREAM_BASE_URL").expect("Missing SLIPSTREAM_BASE_URL");
     let api_key = std::env::var("SLIPSTREAM_API_KEY").expect("Missing SLIPSTREAM_API_KEY");
-    let url = format!("{}/utils/generate-slug", base_url);
+    let url = format!("{base_url}/utils/generate-slug");
 
     let client = reqwest::Client::new();
     let resp = client
       .post(&url)
-      .header("Authorization", format!("Bearer {}", api_key))
+      .header("Authorization", format!("Bearer {api_key}"))
       .json(&serde_json::json!({ "name": name }))
       .send()
       .await
@@ -358,7 +336,7 @@ mod tests {
       .name(name)
       .model("openai/o4-mini")
       .description(format!("Test agent {name}"))
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .slug(slug)
       .instructions("You are a helpful assistant")
       .available_tools(["local/web-search/1.0.0"])
@@ -381,7 +359,7 @@ mod tests {
 
     let agent_ref = AgentRef::builder()
       .slug("non-existent")
-      .version("0.0.1")
+      .version(semver::Version::parse("0.0.1").unwrap())
       .build();
     let result = registry
       .get(agent_ref)
@@ -399,13 +377,13 @@ mod tests {
     // Test has with a non-existent agent (should return false)
     let agent_ref = AgentRef::builder()
       .slug("non-existent-agent")
-      .version("0.0.1")
+      .version(semver::Version::parse("0.0.1").unwrap())
       .build();
     let result = registry
       .has(agent_ref)
       .await
       .expect("HTTP call should succeed");
-    assert_eq!(result, false);
+    assert!(!result);
   }
 
   #[tokio::test]
@@ -414,7 +392,7 @@ mod tests {
 
     // Ensure there are agents present for the test
     for i in 0..2 {
-      let agent_name = format!("keys-agent-{}", i);
+      let agent_name = format!("keys-agent-{i}");
       let agent = create_test_agent(&agent_name).await;
       let agent_ref = AgentRef::from(&agent);
       let _ = registry.del(agent_ref.clone()).await;
@@ -438,7 +416,7 @@ mod tests {
 
     // Cleanup
     for i in 0..2 {
-      let agent_name = format!("keys-agent-{}", i);
+      let agent_name = format!("keys-agent-{i}");
       let agent = create_test_agent(&agent_name).await;
       let agent_ref = AgentRef::from(&agent);
       let _ = registry.del(agent_ref).await;
@@ -446,7 +424,7 @@ mod tests {
 
     // Cleanup
     for i in 0..2 {
-      let agent_name = format!("keys-agent-{}", i);
+      let agent_name = format!("keys-agent-{i}");
       let agent = create_test_agent(&agent_name).await;
       let agent_ref = AgentRef::from(&agent);
       let _ = registry.del(agent_ref).await;
@@ -503,7 +481,7 @@ mod tests {
 
     // Cleanup before test
     for i in 0..5 {
-      let agent_name = format!("pagination-agent-{}", i);
+      let agent_name = format!("pagination-agent-{i}");
       let agent = create_test_agent(&agent_name).await;
       let agent_ref = AgentRef::from(&agent);
       let _ = registry.del(agent_ref).await;
@@ -511,7 +489,7 @@ mod tests {
 
     // Create a few agents to test pagination
     for i in 0..5 {
-      let agent_name = format!("pagination-agent-{}", i);
+      let agent_name = format!("pagination-agent-{i}");
       let agent = create_test_agent(&agent_name).await;
       let agent_ref = AgentRef::from(&agent);
       registry
@@ -534,7 +512,7 @@ mod tests {
 
     // Cleanup
     for i in 0..5 {
-      let agent_name = format!("pagination-agent-{}", i);
+      let agent_name = format!("pagination-agent-{i}");
       let agent = create_test_agent(&agent_name).await;
       let agent_ref = AgentRef::from(&agent);
       let _ = registry.del(agent_ref).await;

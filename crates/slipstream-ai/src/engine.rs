@@ -61,6 +61,46 @@ impl Engine {
     self.providers.insert(provider, config);
     Ok(())
   }
+}
+
+impl Engine {
+  async fn validate_agent(&self, agent_ref: &AgentRef) -> Result<AgentDefinition> {
+    self
+      .meta
+      .agents()
+      .get(agent_ref.clone())
+      .await?
+      .ok_or_else(|| Error::UnknownAgent(agent_ref.to_string()))
+  }
+
+  async fn validate_model(&self, agent: &AgentDefinition) -> Result<ModelDefinition> {
+    let model_name = agent.model.as_str();
+    self
+      .meta
+      .models()
+      .get(model_name.to_string())
+      .await?
+      .ok_or_else(|| Error::UnknownModel(model_name.to_string()))
+  }
+
+  async fn validate_tool(&self, tool_ref: &ToolRef) -> Result<ToolDefinition> {
+    self
+      .meta
+      .tools()
+      .get(tool_ref.clone())
+      .await?
+      .ok_or_else(|| Error::AgentTool(tool_ref.to_string()))
+  }
+
+  async fn validate_agent_tools(&self, agent: &AgentDefinition) -> Result<()> {
+    for tool_ref in &agent.available_tools {
+      let tool_ref: ToolRef =
+        ToolRef::from_str(&tool_ref).map_err(|e| Error::AgentTool(e.to_string()))?;
+
+      self.validate_tool(&tool_ref).await?;
+    }
+    Ok(())
+  }
 
   pub async fn execute(
     &self,
@@ -70,20 +110,9 @@ impl Engine {
     let mut context = ExecutionContext::new();
 
     let agent_ref: AgentRef = agent.as_ref().parse()?;
-    let agent_definition = self
-      .meta
-      .agents()
-      .get(agent_ref.clone())
-      .await?
-      .ok_or_else(|| Error::UnknownAgent(agent_ref.to_string()))?;
+    let agent_definition = self.validate_agent(&agent_ref).await?;
 
-    let model_name = agent_definition.model.as_str();
-    let model_definition = self
-      .meta
-      .models()
-      .get(model_name.to_string())
-      .await?
-      .ok_or_else(|| Error::UnknownModel(model_name.to_string()))?;
+    let model_definition = self.validate_model(&agent_definition).await?;
 
     let provider_name = model_definition.provider;
     let _provider_config = self
@@ -92,19 +121,7 @@ impl Engine {
       .ok_or_else(|| Error::UnknownProvider(provider_name.to_string()))?
       .clone();
 
-    for tool_ref in &agent_definition.available_tools {
-      let tool_ref: ToolRef =
-        ToolRef::from_str(&tool_ref).map_err(|e| Error::AgentTool(e.to_string()))?;
-
-      self
-        .meta
-        .tools()
-        .get(tool_ref.clone())
-        .await?
-        .ok_or_else(|| {
-          Error::AgentTool(format!("Tool {tool_ref} not found for agent {agent_ref}"))
-        })?;
-    }
+    self.validate_agent_tools(&agent_definition).await?;
 
     // TODO: convert all agent definitions to Agent instances and register on the context
     // TODO: convert all tools to AgentTool instances and register on the context

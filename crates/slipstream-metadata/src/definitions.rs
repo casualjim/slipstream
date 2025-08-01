@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use validator::Validate;
 
 use crate::{EnumKind, Error};
+use semver::Version;
 
 #[derive(
   Debug,
@@ -21,7 +22,7 @@ pub struct AgentRef {
   #[builder(setter(into))]
   pub slug: String,
   #[builder(default, setter(strip_option, into))]
-  pub version: Option<String>,
+  pub version: Option<Version>,
 }
 
 /// Display as "slug/version" if version is Some, else just "slug"
@@ -46,10 +47,13 @@ impl FromStr for AgentRef {
         slug: parts[0].to_string(),
         version: None,
       }),
-      2 => Ok(AgentRef {
-        slug: parts[0].to_string(),
-        version: Some(parts[1].to_string()),
-      }),
+      2 => {
+        let v = Version::parse(parts[1]).map_err(Error::InvalidVersion)?;
+        Ok(AgentRef {
+          slug: parts[0].to_string(),
+          version: Some(v),
+        })
+      }
       _ => Err(Error::InvalidRef {
         kind: "agent",
         reason: "expected format 'slug' or 'slug/version'",
@@ -92,8 +96,7 @@ pub struct AgentDefinition {
   #[builder(default, setter(strip_option, into))]
   pub description: Option<String>,
   #[builder(setter(into))]
-  #[validate(length(min = 1, message = "Agent version cannot be empty"))]
-  pub version: String,
+  pub version: Version,
   #[builder(setter(into))]
   #[validate(length(min = 1, message = "Agent slug cannot be empty"))]
   pub slug: String,
@@ -144,7 +147,7 @@ pub struct ToolRef {
   #[builder(setter(into))]
   pub slug: String,
   #[builder(default, setter(strip_option, into))]
-  pub version: Option<String>,
+  pub version: Option<Version>,
   pub provider: ToolProvider,
 }
 
@@ -160,12 +163,9 @@ impl validator::Validate for ToolRef {
     }
 
     // Version is now optional, so do not require it
-    if let Some(v) = &self.version {
-      if v.is_empty() {
-        let mut error = validator::ValidationError::new("length");
-        error.message = Some("Tool version cannot be empty if specified".into());
-        errors.add("version", error);
-      }
+    // If present, Version has already validated semver strictly via serde/builder parsing.
+    if let Some(_v) = &self.version {
+      // no-op
     }
 
     if errors.is_empty() {
@@ -205,14 +205,13 @@ impl FromStr for ToolRef {
 
     if parts.len() < 2 {
       return Err(format!(
-        "Invalid tool reference format: '{}'. Expected 'provider/slug' or 'provider/slug/version'",
-        s
+        "Invalid tool reference format: '{s}'. Expected 'provider/slug' or 'provider/slug/version'"
       ));
     }
 
     let provider_str = parts[0].to_lowercase();
     let provider = ToolProvider::from_str(&provider_str)
-      .map_err(|_| format!("Unknown tool provider: '{}'", provider_str))?;
+      .map_err(|_| format!("Unknown tool provider: '{provider_str}'"))?;
 
     let slug = parts[1];
     if slug.is_empty() {
@@ -224,15 +223,15 @@ impl FromStr for ToolRef {
       if v.is_empty() {
         return Err("Tool version cannot be empty when specified".to_string());
       }
-      Some(v.to_string())
+      let parsed = Version::parse(v).map_err(|e| format!("Invalid semantic version: {e}"))?;
+      Some(parsed)
     } else {
       None
     };
 
     if parts.len() > 3 {
       return Err(format!(
-        "Invalid tool reference format: '{}'. Too many components",
-        s
+        "Invalid tool reference format: '{s}'. Too many components"
       ));
     }
 
@@ -329,8 +328,7 @@ pub struct ToolDefinition {
   #[builder(default, setter(strip_option, into))]
   pub description: Option<String>,
   #[builder(setter(into))]
-  #[validate(length(min = 1, message = "Tool version cannot be empty"))]
-  pub version: String,
+  pub version: Version,
   #[builder(default)]
   pub arguments: Option<schemars::Schema>,
   pub provider: ToolProvider,
@@ -672,14 +670,10 @@ impl ToolRef {
   }
 
   /// Create a ToolRef with a specific version
-  pub fn with_version(
-    provider: ToolProvider,
-    slug: impl Into<String>,
-    version: impl Into<String>,
-  ) -> Self {
+  pub fn with_version(provider: ToolProvider, slug: impl Into<String>, version: Version) -> Self {
     Self {
       slug: slug.into(),
-      version: Some(version.into()),
+      version: Some(version),
       provider,
     }
   }
@@ -698,7 +692,7 @@ mod tests {
     let agent = AgentDefinition::builder()
       .name("test-agent")
       .model("gpt-4")
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .slug("test-agent")
       .instructions("You are a helpful assistant")
       .organization("test-org")
@@ -718,7 +712,7 @@ mod tests {
     let agent = AgentDefinition::builder()
       .name("minimal-agent")
       .model("gpt-3.5-turbo")
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .slug("minimal-agent")
       .instructions("Minimal instructions")
       .organization("org")
@@ -738,7 +732,7 @@ mod tests {
 
     let b = AgentRef::from_str("foo/1.2.3").unwrap();
     assert_eq!(b.slug, "foo");
-    assert_eq!(b.version, Some("1.2.3".to_string()));
+    assert_eq!(b.version, Some(Version::parse("1.2.3").unwrap()));
   }
 
   #[test]
@@ -750,7 +744,7 @@ mod tests {
     assert_eq!(a.to_string(), "foo");
     let b = AgentRef {
       slug: "foo".to_string(),
-      version: Some("1.2.3".to_string()),
+      version: Some(Version::parse("1.2.3").unwrap()),
     };
     assert_eq!(b.to_string(), "foo/1.2.3");
   }
@@ -767,7 +761,7 @@ mod tests {
     let tool_ref = ToolRef::from_str("mcp/file-manager/1.2.3").unwrap();
     assert_eq!(tool_ref.provider, ToolProvider::MCP);
     assert_eq!(tool_ref.slug, "file-manager");
-    assert_eq!(tool_ref.version, Some("1.2.3".to_string()));
+    assert_eq!(tool_ref.version, Some(Version::parse("1.2.3").unwrap()));
 
     // Test all providers
     let providers = [
@@ -778,7 +772,7 @@ mod tests {
     ];
 
     for (provider_str, expected_provider) in providers {
-      let tool_ref = ToolRef::from_str(&format!("{}/test-tool", provider_str)).unwrap();
+      let tool_ref = ToolRef::from_str(&format!("{provider_str}/test-tool")).unwrap();
       assert_eq!(tool_ref.provider, expected_provider);
       assert_eq!(tool_ref.slug, "test-tool");
     }
@@ -816,7 +810,7 @@ mod tests {
     // Test with version
     let tool_ref = ToolRef {
       slug: "file-manager".to_string(),
-      version: Some("1.2.3".to_string()),
+      version: Some(Version::parse("1.2.3").unwrap()),
       provider: ToolProvider::MCP,
     };
     assert_eq!(tool_ref.to_string(), "mcp/file-manager/1.2.3");
@@ -845,7 +839,7 @@ mod tests {
     // Test serialization
     let tool_ref = ToolRef {
       slug: "test-tool".to_string(),
-      version: Some("1.0.0".to_string()),
+      version: Some(Version::parse("1.0.0").unwrap()),
       provider: ToolProvider::Local,
     };
     let json = serde_json::to_string(&tool_ref).unwrap();
@@ -855,7 +849,7 @@ mod tests {
     let deserialized: ToolRef = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.provider, ToolProvider::Local);
     assert_eq!(deserialized.slug, "test-tool");
-    assert_eq!(deserialized.version, Some("1.0.0".to_string()));
+    assert_eq!(deserialized.version, Some(Version::parse("1.0.0").unwrap()));
 
     // Test invalid JSON deserialization
     let invalid_json = "\"invalid\"";
@@ -868,12 +862,15 @@ mod tests {
     let tool_ref = ToolRef::builder()
       .slug("test-tool")
       .provider(ToolProvider::Local)
-      .version("2.0.0")
+      .version(Version::parse("2.0.0").unwrap())
       .build();
 
     assert_eq!(tool_ref.slug, "test-tool");
     assert_eq!(tool_ref.provider, ToolProvider::Local);
-    assert_eq!(tool_ref.version, Some("2.0.0".to_string()));
+    assert_eq!(
+      tool_ref.version,
+      Some(semver::Version::parse("2.0.0").unwrap())
+    );
   }
 
   #[test]
@@ -883,10 +880,14 @@ mod tests {
     assert_eq!(tool_ref1.provider, ToolProvider::MCP);
     assert!(tool_ref1.version.is_none());
 
-    let tool_ref2 = ToolRef::with_version(ToolProvider::Client, "versioned-tool", "1.5.0");
+    let tool_ref2 = ToolRef::with_version(
+      ToolProvider::Client,
+      "versioned-tool",
+      Version::parse("1.5.0").unwrap(),
+    );
     assert_eq!(tool_ref2.slug, "versioned-tool");
     assert_eq!(tool_ref2.provider, ToolProvider::Client);
-    assert_eq!(tool_ref2.version, Some("1.5.0".to_string()));
+    assert_eq!(tool_ref2.version, Some(Version::parse("1.5.0").unwrap()));
   }
 
   #[test]
@@ -894,7 +895,7 @@ mod tests {
     let tool = ToolDefinition::builder()
       .slug("test-tool")
       .name("Test Tool")
-      .version("1.0.0")
+      .version(Version::parse("1.0.0").unwrap())
       .provider(ToolProvider::Local)
       .description("A test tool")
       .build();
@@ -1008,7 +1009,7 @@ mod tests {
     let valid_agent = AgentDefinition::builder()
       .name("test-agent")
       .model("gpt-4")
-      .version("1.0.0")
+      .version(Version::parse("1.0.0").unwrap())
       .slug("test-agent")
       .instructions("You are helpful")
       .organization("org")
@@ -1021,7 +1022,7 @@ mod tests {
     let invalid_agent = AgentDefinition::builder()
       .name("")
       .model("gpt-4")
-      .version("1.0.0")
+      .version(Version::parse("1.0.0").unwrap())
       .slug("test-agent")
       .instructions("You are helpful")
       .organization("org")
@@ -1033,7 +1034,7 @@ mod tests {
     let invalid_agent2 = AgentDefinition::builder()
       .name("test-agent")
       .model("gpt-4")
-      .version("1.0.0")
+      .version(Version::parse("1.0.0").unwrap())
       .slug("test-agent")
       .instructions("")
       .organization("org")
@@ -1047,7 +1048,7 @@ mod tests {
     let valid_tool = ToolDefinition::builder()
       .slug("test-tool")
       .name("Test Tool")
-      .version("1.0.0")
+      .version(Version::parse("1.0.0").unwrap())
       .provider(ToolProvider::Local)
       .build();
 
@@ -1057,16 +1058,18 @@ mod tests {
     let invalid_tool = ToolDefinition::builder()
       .slug("")
       .name("Test Tool")
-      .version("1.0.0")
+      .version(Version::parse("1.0.0").unwrap())
       .provider(ToolProvider::Local)
       .build();
     assert!(Validate::validate(&invalid_tool).is_err());
 
-    // Empty version should fail validation
+    // Version emptiness no longer applicable: Version is strongly typed.
+    // Keep a negative case on invalid provider/slug combo if needed in the future.
+    // For now, ensure another invalid case is covered: empty name should fail.
     let invalid_tool2 = ToolDefinition::builder()
       .slug("test-tool")
-      .name("Test Tool")
-      .version("")
+      .name("")
+      .version(Version::parse("1.0.0").unwrap())
       .provider(ToolProvider::Local)
       .build();
     assert!(Validate::validate(&invalid_tool2).is_err());
@@ -1093,7 +1096,7 @@ mod tests {
     let agent = AgentDefinition::builder()
       .name("test")
       .model("gpt-4")
-      .version("1.0.0")
+      .version(semver::Version::parse("1.0.0").unwrap())
       .slug("test")
       .instructions("test")
       .organization("org")

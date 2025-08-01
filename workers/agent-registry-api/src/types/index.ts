@@ -4,7 +4,8 @@ import { z } from "zod";
 // Regex constants
 const SLUG_REGEX = /^[A-Za-z0-9-]{3,}$/;
 const NAME_REGEX = /^[A-Za-z0-9]+[\w\s]{2,}.*$/;
-const SEMVER_REGEX = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const SEMVER_REGEX =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 // Error message constants
 const NAME_ERROR = "Name must contain at least 3 alphanumeric characters";
@@ -70,7 +71,10 @@ const jsonArray = z.array(z.unknown());
 export const semverSchema = z.string().regex(SEMVER_REGEX, { message: SEMVER_ERROR });
 
 // ISO date validation
-const isoDate = z.string().trim().refine((val) => !isNaN(Date.parse(val)), { message: DATE_ERROR });
+const isoDate = z
+  .string()
+  .trim()
+  .refine((val) => !isNaN(Date.parse(val)), { message: DATE_ERROR });
 
 /**
  * Organization entity schema
@@ -182,14 +186,32 @@ export const ModelProviderSchema = z.object({
   description: z.string().nullish().describe("A brief description of the model provider."),
   contextSize: z.number().describe("The maximum number of tokens that can be processed in a single request."),
   maxTokens: z.number().nullish().describe("The maximum number of tokens that can be generated in a single response."),
-  temperature: z.number().nullish().describe("Controls randomness in the generation process. Higher values mean more randomness."),
+  temperature: z
+    .number()
+    .nullish()
+    .describe("Controls randomness in the generation process. Higher values mean more randomness."),
   topP: z.number().nullish().describe("Controls diversity via nucleus sampling. A lower value means less diversity."),
-  frequencyPenalty: z.number().nullish().describe("Penalizes new tokens based on their existing frequency in the text so far."),
-  presencePenalty: z.number().nullish().describe("Penalizes new tokens based on whether they appear in the text so far."),
-  capabilities: jsonArray.describe("A list of the model's capabilities, such as chat, completion, or function calling."), // Array of ModelCapabilities
-  inputModalities: jsonArray.describe("A list of the modalities the model can accept as input (e.g., text, image, video)."), // Array of Modalities
-  outputModalities: jsonArray.describe("A list of the modalities the model can generate as output (e.g., text, image, video)."), // Array of Modalities
-  dialect: z.nativeEnum(APIDialect).nullish().describe("The API dialect used by the model provider (e.g., openai, anthropic)."),
+  frequencyPenalty: z
+    .number()
+    .nullish()
+    .describe("Penalizes new tokens based on their existing frequency in the text so far."),
+  presencePenalty: z
+    .number()
+    .nullish()
+    .describe("Penalizes new tokens based on whether they appear in the text so far."),
+  capabilities: jsonArray.describe(
+    "A list of the model's capabilities, such as chat, completion, or function calling.",
+  ), // Array of ModelCapabilities
+  inputModalities: jsonArray.describe(
+    "A list of the modalities the model can accept as input (e.g., text, image, video).",
+  ), // Array of Modalities
+  outputModalities: jsonArray.describe(
+    "A list of the modalities the model can generate as output (e.g., text, image, video).",
+  ), // Array of Modalities
+  dialect: z
+    .nativeEnum(APIDialect)
+    .nullish()
+    .describe("The API dialect used by the model provider (e.g., openai, anthropic)."),
 });
 
 /**
@@ -208,7 +230,9 @@ export const AgentSchema = z.object({
   description: z.string().nullish().describe("A brief description of what the agent does."),
   model: z.string().trim().min(1).describe("The identifier of the model used by the agent."),
   instructions: z.string().trim().min(1).describe("The system instructions or prompt for the agent."),
-  availableTools: jsonArray.nullish().describe("A list of tools available to the agent, identified by slug and version."),
+  availableTools: jsonArray
+    .nullish()
+    .describe("A list of tools available to the agent, identified by slug and version."),
   organization: z.string().trim().min(1).describe("The slug of the organization this agent belongs to."),
   project: z.string().trim().min(1).describe("The slug of the project this agent belongs to."),
   createdBy: z.string().trim().min(1).describe("The ID of the user who created the agent."),

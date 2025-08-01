@@ -1,5 +1,32 @@
 # Agent Registry Implementation Specification
 
+## Version Semantics (Updated)
+
+- Use `semver::Version` internally across references (AgentRef/ToolRef) and definitions (AgentDefinition/ToolDefinition).
+- Enforce strict SemVer parsing; prerelease ordering per SemVer.
+- Keep wire format as strings; convert with `Version::to_string()` when sending, parse on receiving.
+- For Option<Version>, apply `None < Some(Version)` where sorting is needed.
+
+## Latest Selection in Memory Registries (Updated)
+
+- The in-memory registries do not store a “latest” pointer.
+- For versionless `get`/`has`:
+  - Agents: compute latest by scanning `slug/version` entries and selecting max by SemVer.
+  - Tools: compute latest by scanning `provider/slug/version` entries and selecting max by SemVer.
+
+## Testing Notes (Updated)
+
+- Unit tests assert:
+  - Versionless GET/HAS selects highest SemVer.
+  - keys() returns only versioned keys (no latest pointer entries).
+  - Wire-facing tests continue to assert string versions for HTTP/NATS payloads.
+
+## Migration Guidance (Updated)
+
+- Replace string-based versions with `Version` internally.
+- At boundaries that require strings, serialize/deserialize explicitly.
+- Adjust any builders/tests to construct `Version` via `Version::parse("x.y.z")`.
+
 ## Version Handling Semantics (Agents and Tools)
 
 Key principle:

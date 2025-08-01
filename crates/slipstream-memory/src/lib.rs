@@ -4,6 +4,7 @@ mod migrations;
 mod mutations;
 mod nodes;
 mod queries;
+mod repository;
 mod service;
 
 pub use engine::Engine;

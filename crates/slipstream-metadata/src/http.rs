@@ -34,13 +34,9 @@ struct APIEnvelope<T> {
 
 fn create_client(api_key: SecretString) -> Result<reqwest_middleware::ClientWithMiddleware> {
   let mut default_headers = HeaderMap::new();
-  let api_key = HeaderValue::from_bytes(format!("Bearer {}", api_key.expose_secret()).as_bytes())
-    .map_err(|e| {
-    crate::Error::Io(std::io::Error::new(
-      std::io::ErrorKind::Other,
-      format!("HeaderValue error: {e}"),
-    ))
-  })?;
+  let api_key =
+    HeaderValue::from_bytes(format!("Bearer {}", api_key.expose_secret()).as_bytes())
+      .map_err(|e| crate::Error::Io(std::io::Error::other(format!("HeaderValue error: {e}"))))?;
   default_headers.insert(AUTHORIZATION, api_key);
 
   // let cache_manager = MokaManager::default();
@@ -54,10 +50,9 @@ fn create_client(api_key: SecretString) -> Result<reqwest_middleware::ClientWith
         .read_timeout(Duration::from_secs(4))
         .build()
         .map_err(|e| {
-          crate::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Reqwest client build error: {e}"),
-          ))
+          crate::Error::Io(std::io::Error::other(format!(
+            "Reqwest client build error: {e}"
+          )))
         })?,
     )
     // .with(Cache(HttpCache {
