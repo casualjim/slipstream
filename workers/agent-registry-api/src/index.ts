@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
-import { CreateAgent, DeleteAgent, GetAgent, ListAgents, UpdateAgent } from "./endpoints/agents";
+import { CreateAgent, DeleteAgent, GetAgent, GetLatestAgent, ListAgents, UpdateAgent } from "./endpoints/agents";
 import { GetModel, ListModels } from "./endpoints/models";
 import {
   CreateOrganization,
@@ -14,7 +14,7 @@ import {
   UpdateOrganization,
 } from "./endpoints/organizations";
 import { CreateProject, DeleteProject, GetProject, ListProjects, UpdateProject } from "./endpoints/projects";
-import { CreateTool, DeleteTool, GetTool, ListTools, UpdateTool } from "./endpoints/tools";
+import { CreateTool, DeleteTool, GetLatestTool, GetTool, ListTools, UpdateTool } from "./endpoints/tools";
 // Import endpoints
 import { bearerAuth } from "./middleware/auth";
 import type { AppHonoEnv } from "./types";
@@ -91,6 +91,7 @@ openapi.delete("/projects/:slug", DeleteProject);
 // // Tools
 openapi.post("/tools", CreateTool);
 openapi.get("/tools", ListTools);
+openapi.get("/tools/:provider/:slug", GetLatestTool);
 openapi.get("/tools/:provider/:slug/:version", GetTool);
 openapi.put("/tools/:provider/:slug/:version", UpdateTool);
 openapi.delete("/tools/:provider/:slug/:version", DeleteTool);
@@ -102,6 +103,7 @@ openapi.get("/models/:id{.+}", GetModel);
 // Agents
 openapi.post("/agents", CreateAgent);
 openapi.get("/agents", ListAgents);
+openapi.get("/agents/:slug", GetLatestAgent);
 openapi.get("/agents/:slug/:version", GetAgent);
 openapi.put("/agents/:slug/:version", UpdateAgent);
 openapi.delete("/agents/:slug/:version", DeleteAgent);

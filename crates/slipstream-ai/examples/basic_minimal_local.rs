@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
 
   let mut stream = engine
     .execute(
-      "minimal-agent/0.0.1",
+      "minimal-agent",
       Prompt::new(
         "What is the answer to the ultimate question of life, the universe, and everything?",
       )?

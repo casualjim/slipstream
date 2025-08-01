@@ -1,7 +1,7 @@
 import { D1CreateEndpoint, D1DeleteEndpoint, D1ListEndpoint, D1ReadEndpoint, D1UpdateEndpoint } from "chanfana";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { ModelService, ProjectService, ToolService } from "../lib/services";
+import { AgentService, ModelService, ProjectService, ToolService } from "../lib/services";
 import { generateSlug } from "../lib/utils";
 import type { Agent, HandleArgs } from "../types";
 import { AgentSchema, semverSchema } from "../types";
@@ -33,6 +33,7 @@ const agentMeta = {
         try {
           obj.availableTools = JSON.parse(obj.availableTools as string);
         } catch {
+          console.error(`Failed to parse availableTools for agent ${obj.slug}:`, obj.availableTools);
           obj.availableTools = [];
         }
       }
@@ -78,6 +79,15 @@ export class CreateAgent extends D1CreateEndpoint<HandleArgs> {
     data.updatedBy = auth.userId;
     data.createdAt = new Date().toISOString();
     data.updatedAt = new Date().toISOString();
+
+    console.log("[CreateAgent.before] incoming:", {
+      name: data.name,
+      slug: data.slug,
+      version: data.version,
+      organization: data.organization,
+      project: data.project,
+      model: data.model,
+    });
 
     // Validate access
     if (!auth.organizations.includes(data.organization)) {
@@ -364,3 +374,66 @@ export class ListAgents extends D1ListEndpoint<HandleArgs> {
     };
   }
 }
+
+/**
+ * ## Get Latest Agent
+ *
+ * Retrieves the latest version of an agent by its slug.
+ * It ensures that the user has access to the organization the agent belongs to.
+ * This endpoint finds the most recent semantic version of the agent.
+ */
+export class GetLatestAgent extends D1ReadEndpoint<HandleArgs> {
+  // @ts-expect-error - chanfana has poor type definitions
+  _meta = {
+    summary: "Get the latest version of an Agent",
+    description: "Retrieves the latest version of an agent by its slug from the registry",
+    ...agentMeta,
+    // Explicitly expose slug to the read endpoint so Chanfana maps :slug into filters
+    fields: AgentSchema.pick({ slug: true }),
+    pathParameters: ["slug"], // Only slug, no version
+  };
+
+
+
+  // Override to handle fetching the latest version
+  async fetch(filters: any) {
+    if (!filters.filters || filters.filters.length === 0) {
+      console.log("[GetLatestAgent] No filters provided");
+      throw new HTTPException(404, { message: "Agent not found" });
+    }
+
+    console.log("[GetLatestAgent] Filters:", filters.filters);
+
+    // Extract slug from filters
+    const slugFilter = filters.filters.find((f: any) => f.field === "slug");
+    if (!slugFilter) {
+      console.log("[GetLatestAgent] No slug filter found");
+      throw new HTTPException(404, { message: "Agent not found" });
+    }
+
+    const slug = slugFilter.value;
+    console.log("[GetLatestAgent] Looking for latest version of slug:", slug);
+
+    // Use AgentService to get the latest version
+    const agentService = new AgentService(this.getDBBinding());
+    const agent = await agentService.getLatestBySlug(slug);
+
+    if (!agent) {
+      console.log("[GetLatestAgent] Agent not found");
+      throw new HTTPException(404, { message: "Agent not found" });
+    }
+
+    console.log("[GetLatestAgent] Found agent:", agent);
+
+    // Check authorization
+    const [c] = this.args;
+    const auth = c.get("auth");
+    if (!auth.organizations.includes(agent.organization as string)) {
+      console.log("[GetLatestAgent] Access denied for org:", agent.organization);
+      throw new HTTPException(403, { message: "Access denied" });
+    }
+
+    return agent;
+  }
+}
+

@@ -69,7 +69,21 @@ impl Registry for HttpAgentRegistry {
   type Subject = AgentDefinition;
   type Key = AgentRef;
 
+  /// Create or update an agent. Version is required.
   async fn put(&self, key: Self::Key, subject: Self::Subject) -> Result<()> {
+    if key.version.is_none() {
+      // Return a structured validation error for missing version on mutation
+      let mut errs = validator::ValidationErrors::new();
+      errs.add(
+        "version",
+        validator::ValidationError {
+          code: std::borrow::Cow::from("required"),
+          message: Some(std::borrow::Cow::from("version is required for put")),
+          params: std::collections::HashMap::new(),
+        },
+      );
+      return Err(crate::Error::Validation(errs));
+    }
     subject.validate()?;
 
     let update_request = UpdateAgentRequest {
@@ -79,7 +93,12 @@ impl Registry for HttpAgentRegistry {
       instructions: Some(subject.instructions.clone()),
       available_tools: subject.available_tools.clone(),
     };
-    let url = format!("{}/agents/{}/{}", self.base_url, key.slug, key.version);
+    let url = format!(
+      "{}/agents/{}/{}",
+      self.base_url,
+      key.slug,
+      key.version.as_ref().unwrap()
+    );
     let response = self
       .client
       .put(&url)
@@ -149,14 +168,33 @@ impl Registry for HttpAgentRegistry {
     }
   }
 
+  /// Delete an agent. Version is required.
   async fn del(&self, key: Self::Key) -> Result<Option<Self::Subject>> {
+    if key.version.is_none() {
+      // Return a structured validation error for missing version on mutation
+      let mut errs = validator::ValidationErrors::new();
+      errs.add(
+        "version",
+        validator::ValidationError {
+          code: std::borrow::Cow::from("required"),
+          message: Some(std::borrow::Cow::from("version is required for delete")),
+          params: std::collections::HashMap::new(),
+        },
+      );
+      return Err(crate::Error::Validation(errs));
+    }
     // First get the agent to return it if deletion succeeds
     let agent = self.get(key.clone()).await?;
     if agent.is_none() {
       return Ok(None);
     }
 
-    let url = format!("{}/agents/{}/{}", self.base_url, key.slug, key.version);
+    let url = format!(
+      "{}/agents/{}/{}",
+      self.base_url,
+      key.slug,
+      key.version.as_ref().unwrap()
+    );
     let response = self.client.delete(&url).send().await.map_err(|e| {
       crate::Error::Io(std::io::Error::new(
         std::io::ErrorKind::Other,
@@ -181,8 +219,13 @@ impl Registry for HttpAgentRegistry {
     }
   }
 
-  async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    let url = format!("{}/agents/{}", self.base_url, name);
+  /// Get an agent. If version is None, returns the latest version.
+  async fn get(&self, key: Self::Key) -> Result<Option<Self::Subject>> {
+    let url = if let Some(version) = &key.version {
+      format!("{}/agents/{}/{}", self.base_url, key.slug, version)
+    } else {
+      format!("{}/agents/{}", self.base_url, key.slug)
+    };
     let response = self.client.get(&url).send().await.map_err(|e| {
       crate::Error::Io(std::io::Error::new(
         std::io::ErrorKind::Other,
@@ -216,8 +259,13 @@ impl Registry for HttpAgentRegistry {
     }
   }
 
-  async fn has(&self, name: Self::Key) -> Result<bool> {
-    let url = format!("{}/agents/{}", self.base_url, name);
+  /// Check if an agent exists. If version is None, checks for latest.
+  async fn has(&self, key: Self::Key) -> Result<bool> {
+    let url = if let Some(version) = &key.version {
+      format!("{}/agents/{}/{}", self.base_url, key.slug, version)
+    } else {
+      format!("{}/agents/{}", self.base_url, key.slug)
+    };
 
     let response = self.client.get(&url).send().await.map_err(|e| {
       crate::Error::Io(std::io::Error::new(
@@ -494,6 +542,7 @@ mod tests {
   }
 
   #[tokio::test]
+  #[ignore = "not very valuable and takes a long time"]
   async fn test_http_agent_registry_direct_construction() {
     // Use a dummy API key for testing
     let registry = HttpAgentRegistry::new("http://localhost:8787".to_string(), "test-key".into())

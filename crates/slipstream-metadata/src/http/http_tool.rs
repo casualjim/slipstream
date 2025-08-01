@@ -64,8 +64,19 @@ impl Registry for HttpToolRegistry {
 
   async fn put(&self, tool_ref: Self::Key, subject: Self::Subject) -> Result<()> {
     tool_ref.validate()?;
-    // Safe to unwrap after validation
-    let version = tool_ref.version.as_ref().unwrap();
+    // Enforce version for mutations
+    let Some(version) = tool_ref.version.as_ref() else {
+      let mut errs = validator::ValidationErrors::new();
+      errs.add(
+        "version",
+        validator::ValidationError {
+          code: std::borrow::Cow::from("required"),
+          message: Some(std::borrow::Cow::from("version is required for put")),
+          params: std::collections::HashMap::new(),
+        },
+      );
+      return Err(crate::Error::Validation(errs));
+    };
 
     // Check if tool exists for update vs create
     let exists = self.has(tool_ref.clone()).await?;
@@ -156,9 +167,19 @@ impl Registry for HttpToolRegistry {
 
   async fn del(&self, tool_ref: Self::Key) -> Result<Option<Self::Subject>> {
     tool_ref.validate()?;
-    // Ensure we have a version
-    // Safe to unwrap after validation
-    let version = tool_ref.version.as_ref().unwrap();
+    // Enforce version for mutations
+    let Some(version) = tool_ref.version.as_ref() else {
+      let mut errs = validator::ValidationErrors::new();
+      errs.add(
+        "version",
+        validator::ValidationError {
+          code: std::borrow::Cow::from("required"),
+          message: Some(std::borrow::Cow::from("version is required for delete")),
+          params: std::collections::HashMap::new(),
+        },
+      );
+      return Err(crate::Error::Validation(errs));
+    };
 
     // First get the tool to return it if deletion succeeds
     let tool = self.get(tool_ref.clone()).await?;
@@ -198,14 +219,18 @@ impl Registry for HttpToolRegistry {
 
   async fn get(&self, tool_ref: Self::Key) -> Result<Option<Self::Subject>> {
     tool_ref.validate()?;
-    // Ensure we have a version
-    // Safe to unwrap after validation
-    let version = tool_ref.version.as_ref().unwrap();
-
-    let url = format!(
-      "{}/tools/{}/{}/{}",
-      self.base_url, tool_ref.provider, tool_ref.slug, version
-    );
+    // Support versionless GET by calling the latest endpoint when version is None
+    let url = if let Some(version) = tool_ref.version.as_ref() {
+      format!(
+        "{}/tools/{}/{}/{}",
+        self.base_url, tool_ref.provider, tool_ref.slug, version
+      )
+    } else {
+      format!(
+        "{}/tools/{}/{}",
+        self.base_url, tool_ref.provider, tool_ref.slug
+      )
+    };
 
     let response = self.client.get(&url).send().await.map_err(|e| {
       crate::Error::Io(std::io::Error::new(
@@ -243,14 +268,18 @@ impl Registry for HttpToolRegistry {
   async fn has(&self, tool_ref: Self::Key) -> Result<bool> {
     tool_ref.validate()?;
 
-    // Ensure we have a version
-    // Safe to unwrap after validation
-    let version = tool_ref.version.as_ref().unwrap();
-
-    let url = format!(
-      "{}/tools/{}/{}/{}",
-      self.base_url, tool_ref.provider, tool_ref.slug, version
-    );
+    // Support versionless HAS by calling the latest endpoint when version is None
+    let url = if let Some(version) = tool_ref.version.as_ref() {
+      format!(
+        "{}/tools/{}/{}/{}",
+        self.base_url, tool_ref.provider, tool_ref.slug, version
+      )
+    } else {
+      format!(
+        "{}/tools/{}/{}",
+        self.base_url, tool_ref.provider, tool_ref.slug
+      )
+    };
 
     let response = self.client.head(&url).send().await.map_err(|e| {
       crate::Error::Io(std::io::Error::new(
@@ -381,19 +410,17 @@ mod tests {
       version: None,
     };
 
-    // These should fail with specific validation errors
-    let get_result = registry.get(tool_ref_no_version.clone()).await;
-    match get_result {
-      Err(crate::Error::Validation(_)) => {}
-      _ => panic!("Expected validation error for missing version"),
-    }
+    // GET and HAS support versionless references: they should not return validation errors
+    let _ = registry
+      .get(tool_ref_no_version.clone())
+      .await
+      .expect("versionless GET should not error");
+    let _ = registry
+      .has(tool_ref_no_version.clone())
+      .await
+      .expect("versionless HAS should not error");
 
-    let has_result = registry.has(tool_ref_no_version.clone()).await;
-    match has_result {
-      Err(crate::Error::Validation(_)) => {}
-      _ => panic!("Expected validation error for missing version"),
-    }
-
+    // Mutations still require version and should return validation errors
     let tool = create_test_tool("test");
     let put_result = registry.put(tool_ref_no_version.clone(), tool).await;
     match put_result {
@@ -417,12 +444,34 @@ mod tests {
       version: None,
     };
 
-    let get_result = registry.get(tool_ref_no_version).await;
-    match get_result {
+    // Versionless GET should not yield validation error
+    let _ = registry
+      .get(tool_ref_no_version.clone())
+      .await
+      .expect("versionless GET should not error");
+
+    // Versionless HAS should not yield validation error
+    let _ = registry
+      .has(tool_ref_no_version.clone())
+      .await
+      .expect("versionless HAS should not error");
+
+    // Validation errors must still surface for mutations without version
+    let tool = create_test_tool("test-validation");
+    let put_result = registry.put(tool_ref_no_version.clone(), tool).await;
+    match put_result {
       Err(crate::Error::Validation(validation_errors)) => {
         assert!(validation_errors.field_errors().contains_key("version"));
       }
-      _ => panic!("Expected validation error for missing version"),
+      _ => panic!("Expected validation error for missing version on put"),
+    }
+
+    let del_result = registry.del(tool_ref_no_version.clone()).await;
+    match del_result {
+      Err(crate::Error::Validation(validation_errors)) => {
+        assert!(validation_errors.field_errors().contains_key("version"));
+      }
+      _ => panic!("Expected validation error for missing version on del"),
     }
   }
 

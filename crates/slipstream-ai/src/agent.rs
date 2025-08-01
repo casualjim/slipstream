@@ -243,7 +243,7 @@ impl Agent for DefaultAgent {
   }
 
   fn version(&self) -> &str {
-    &self.name.version
+    self.name.version.as_deref().unwrap_or("latest")
   }
 
   fn instructions(&self) -> InstructionsMessage {

@@ -21,7 +21,7 @@ describe("Tool API Integration Tests", () => {
           provider: "Local",
         }),
       });
-      const body = await response.json();
+      const body = await response.json() as { success: boolean; errors: { message: string }[] };
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -82,7 +82,7 @@ describe("Tool API Integration Tests", () => {
         },
         body: JSON.stringify(toolData),
       });
-      const body = await response.json();
+      const body = await response.json() as { success: boolean };
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -104,7 +104,7 @@ describe("Tool API Integration Tests", () => {
         },
         body: JSON.stringify(toolData),
       });
-      const body = await response.json();
+      const body = await response.json() as { success: boolean };
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -253,7 +253,7 @@ describe("Tool API Integration Tests", () => {
   describe("GET /api/v1/tools", () => {
     it("should return 401 without authorization", async () => {
       const response = await SELF.fetch(`http://local.test/api/v1/tools`);
-      const body = await response.json();
+      const body = await response.json() as { success: boolean; errors: { message: string }[] };
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -527,7 +527,7 @@ describe("Tool API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json();
+      const body = await response.json() as { success: boolean; errors: { message: string }[] };
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -599,7 +599,7 @@ describe("Tool API Integration Tests", () => {
         },
         body: JSON.stringify({ description: "New description" }),
       });
-      const body = await response.json();
+      const body = await response.json() as { success: boolean };
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -636,7 +636,7 @@ describe("Tool API Integration Tests", () => {
           },
         },
       );
-      const body = await response.json();
+      const body = await response.json() as { success: boolean };
 
       expect(response.status).toBe(200);
       expect(body.success).toBe(true);
@@ -660,7 +660,7 @@ describe("Tool API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json();
+      const body = await response.json() as { success: boolean };
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -856,6 +856,164 @@ describe("Tool API Integration Tests", () => {
 
       // Should handle gracefully - either accept it as string or reject with validation error
       expect(response.status).toBeLessThan(500);
+    });
+  });
+
+  // Tests for GET /api/v1/tools/{slug}/latest
+  describe("GET /api/v1/tools/{slug}/latest", () => {
+    it("should get the latest version of a tool", async () => {
+      // Create multiple versions of the same tool
+      const toolVersions = [
+        { name: "Latest Test Tool", slug: "latest-test-tool", version: "1.0.0", provider: "Local" },
+        { name: "Latest Test Tool", slug: "latest-test-tool", version: "1.1.0", provider: "Local" },
+        { name: "Latest Test Tool", slug: "latest-test-tool", version: "2.0.0", provider: "MCP" },
+      ];
+
+      for (const toolData of toolVersions) {
+        await SELF.fetch(`http://local.test/api/v1/tools`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(toolData),
+        });
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/MCP/latest-test-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.result).toMatchObject({
+        slug: "latest-test-tool",
+        version: "2.0.0", // Should return the highest version
+        name: "Latest Test Tool",
+        provider: "MCP",
+      });
+    });
+
+    it("should return 404 if tool slug is not found", async () => {
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/Local/non-existent-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; errors: { message: string }[] }>();
+
+      expect(response.status).toBe(404);
+      expect(body.success).toBe(false);
+      expect(body.errors[0].message).toBe("Not Found");
+    });
+
+    it("should return 401 without authorization", async () => {
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/MCP/latest-test-tool`);
+      const body = await response.json<{ success: boolean; errors: { message: string }[] }>();
+
+      expect(response.status).toBe(401);
+      expect(body.success).toBe(false);
+      expect(body.errors[0].message).toBe("Unauthorized");
+    });
+
+    it("should handle pre-release versions correctly", async () => {
+      // Create versions including pre-releases
+      const toolVersions = [
+        { name: "Prerelease Test Tool", slug: "prerelease-test-tool", version: "1.0.0", provider: "Local" },
+        { name: "Prerelease Test Tool", slug: "prerelease-test-tool", version: "2.0.0-alpha", provider: "Local" },
+        { name: "Prerelease Test Tool", slug: "prerelease-test-tool", version: "2.0.0-beta", provider: "Local" },
+      ];
+
+      for (const toolData of toolVersions) {
+        await SELF.fetch(`http://local.test/api/v1/tools`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(toolData),
+        });
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/Local/prerelease-test-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      // Should return the stable version, not pre-release
+      expect(body.result.version).toBe("1.0.0");
+    });
+
+    it("should handle build metadata correctly", async () => {
+      // Create versions with build metadata
+      const toolVersions = [
+        { name: "Build Metadata Test Tool", slug: "build-metadata-test-tool", version: "1.0.0", provider: "Local" },
+        { name: "Build Metadata Test Tool", slug: "build-metadata-test-tool", version: "1.0.0+build.1", provider: "Local" },
+        { name: "Build Metadata Test Tool", slug: "build-metadata-test-tool", version: "1.0.0+build.2", provider: "Local" },
+      ];
+
+      for (const toolData of toolVersions) {
+        await SELF.fetch(`http://local.test/api/v1/tools`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(toolData),
+        });
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/Local/build-metadata-test-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      // Should return one of the versions with build metadata (they're considered equal in precedence)
+      expect(["1.0.0", "1.0.0+build.1", "1.0.0+build.2"]).toContain(body.result.version);
+    });
+
+    it("should handle multiple providers with same slug", async () => {
+      // Create tools with same slug but different providers
+      const toolVersions = [
+        { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "1.0.0", provider: "Local" },
+        { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "2.0.0", provider: "MCP" },
+        { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "1.5.0", provider: "Client" },
+      ];
+
+      for (const toolData of toolVersions) {
+        await SELF.fetch(`http://local.test/api/v1/tools`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(toolData),
+        });
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/MCP/multi-provider-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      // Should return the highest version across all providers
+      expect(body.result.version).toBe("2.0.0");
+      expect(body.result.provider).toBe("MCP");
     });
   });
 });

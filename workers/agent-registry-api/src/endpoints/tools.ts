@@ -1,4 +1,6 @@
 import { D1CreateEndpoint, D1DeleteEndpoint, D1ListEndpoint, D1ReadEndpoint, D1UpdateEndpoint } from "chanfana";
+import { HTTPException } from "hono/http-exception";
+import { ToolService } from "../lib/services";
 import { generateSlug } from "../lib/utils";
 import type { HandleArgs, Tool } from "../types";
 import { ToolSchema } from "../types";
@@ -33,18 +35,19 @@ const toolMeta = {
     serializer: (obj: Record<string, unknown>) => {
       // Convert JSON string back to object for the response
       if (obj.arguments && typeof obj.arguments === "string") {
-        try {
+        try{
           obj.arguments = JSON.parse(obj.arguments as string);
         } catch {
-          // If parsing fails, keep as string
+          console.error(`Failed to parse arguments for tool ${obj.slug}:`, obj.arguments);
+          obj.arguments = undefined;
         }
       }
 
       // Remove null/undefined optional fields from the response
-      if (obj.arguments === null || obj.arguments === undefined) {
+      if (!obj.arguments) {
         delete obj.arguments;
       }
-      if (obj.description === null || obj.description === undefined) {
+      if (!obj.description) {
         delete obj.description;
       }
 
@@ -208,4 +211,56 @@ _meta = {
   // @ts-ignore - chanfana has poor type definitions
   orderByFields = ["name", "createdAt", "updatedAt"];
   defaultOrderBy = "name";
+}
+
+/**
+ * ## Get Latest Tool
+ *
+ * Retrieves the latest version of a tool by its provider and slug.
+ * This endpoint finds the most recent semantic version of the tool.
+ */
+export class GetLatestTool extends D1ReadEndpoint<HandleArgs> {
+  // @ts-expect-error - chanfana has poor type definitions
+  _meta = {
+    summary: "Get the latest version of a Tool",
+    description: "Retrieves the latest version of a tool by its provider and slug from the registry",
+    ...toolMeta,
+    pathParameters: ["provider", "slug"], // Only provider and slug, no version
+  };
+
+  // Override to handle fetching the latest version
+  async fetch(filters: any) {
+    if (!filters.filters || filters.filters.length === 0) {
+      console.log("[GetLatestTool] No filters provided");
+      return null;
+    }
+
+    console.log("[GetLatestTool] Filters:", filters.filters);
+
+    // Extract provider and slug from filters
+    const providerFilter = filters.filters.find((f: any) => f.field === "provider");
+    const slugFilter = filters.filters.find((f: any) => f.field === "slug");
+
+    if (!providerFilter || !slugFilter) {
+      console.log("[GetLatestTool] Missing provider or slug filter");
+      return null;
+    }
+
+    const provider = providerFilter.value;
+    const slug = slugFilter.value;
+    console.log("[GetLatestTool] Looking for latest version of provider:", provider, "slug:", slug);
+
+    // Use ToolService to get the latest version
+    const toolService = new ToolService(this.getDBBinding());
+    const tool = await toolService.getLatestBySlug(provider, slug);
+
+    if (!tool) {
+      console.log("[GetLatestTool] Tool not found");
+      throw new HTTPException(404, { message: "Not Found" });
+    }
+
+    console.log("[GetLatestTool] Found tool:", tool);
+
+    return tool;
+  }
 }

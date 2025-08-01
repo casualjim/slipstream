@@ -1,5 +1,38 @@
 # Agent Registry API Implementation
 
+## Version Handling Overview
+
+For both Agents and Tools:
+
+Reads
+- GET and HAS support versionless lookups. If you omit the `version` in the reference, the registry returns/checks the latest version:
+  - Agents: latest stored at key "slug"
+  - Tools: latest stored at key "provider/slug"
+
+Writes
+- PUT requires a version and will:
+  - Create/update the versioned record ("slug/version" for agents, "provider/slug/version" for tools)
+  - Update the latest pointer to the submitted subject
+- DEL requires a version and will:
+  - Delete the specified versioned record
+  - If that version was the current latest, recompute latest from remaining versions (highest semantic version), or remove latest pointer if none remain
+
+References and definitions
+- AgentRef.version: Option<String>
+- ToolRef.version: Option<String>
+- AgentDefinition.version and ToolDefinition.version remain required
+
+Reference implementations
+- HTTP: [`crates/slipstream-metadata/src/http/http_agent.rs`](../../crates/slipstream-metadata/src/http/http_agent.rs:1), [`crates/slipstream-metadata/src/http/http_tool.rs`](../../crates/slipstream-metadata/src/http/http_tool.rs:1)
+- Memory: [`crates/slipstream-metadata/src/memory/memory_agent.rs`](crates/slipstream-metadata/src/memory/memory_agent.rs:1), [`crates/slipstream-metadata/src/memory/memory_tool.rs`](crates/slipstream-metadata/src/memory/memory_tool.rs:1)
+- NATS: [`crates/slipstream-metadata/src/nats/agent.rs`](crates/slipstream-metadata/src/nats/agent.rs:1), [`crates/slipstream-metadata/src/nats/tool.rs`](crates/slipstream-metadata/src/nats/tool.rs:1)
+
+Developer guidance
+- Omit version in AgentRef/ToolRef only for reads when “latest” is acceptable
+- Always include version for create/update/delete flows
+- Ensure tests cover both versioned and versionless paths
+
+
 ## Objective
 Create an agent registry API using a Hono API server with [Chanfana](https://chanfana.pages.dev/introduction) for OpenAPI support and Cloudflare D1 integration via auto endpoints (https://chanfana.pages.dev/endpoints/auto/d1). Define data structures to store agent configurations.
 

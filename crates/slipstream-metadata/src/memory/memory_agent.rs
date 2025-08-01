@@ -1,9 +1,11 @@
 use crate::{AgentDefinition, AgentRef};
 use crate::{Pagination, Registry, Result};
 use async_trait::async_trait;
+use semver::Version;
 
 #[derive(Debug, Clone)]
 pub struct MemoryAgentRegistry {
+  // Keyed by "slug" or "slug/version"; for versionless GET/HAS we consult the "latest" pointer
   store: dashmap::DashMap<String, AgentDefinition>,
 }
 
@@ -26,32 +28,108 @@ impl Registry for MemoryAgentRegistry {
   type Subject = AgentDefinition;
   type Key = AgentRef;
 
+  /// Create or update requires version to be present.
   async fn put(&self, name: Self::Key, subject: Self::Subject) -> Result<()> {
-    self.store.insert(name.to_string(), subject);
+    if name.version.is_none() {
+      return Err(crate::Error::Registry {
+        reason: "Version is required for put".to_string(),
+        status_code: None,
+      });
+    }
+    // Persist the concrete version record under "slug/version"
+    let version_key = format!("{}/{}", name.slug, name.version.as_ref().unwrap());
+    self.store.insert(version_key, subject.clone());
+    // Update "latest" pointer under "slug" to the provided subject
+    self.store.insert(name.slug.clone(), subject);
     Ok(())
   }
 
+  /// Delete requires version; we delete that specific version and, if it was the latest, we adjust latest pointer.
   async fn del(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    if let Some((_, removed)) = self.store.remove(&name.to_string()) {
-      Ok(Some(removed))
-    } else {
-      Ok(None)
+    if name.version.is_none() {
+      return Err(crate::Error::Registry {
+        reason: "Version is required for delete".to_string(),
+        status_code: None,
+      });
     }
+    let version_key = format!("{}/{}", name.slug, name.version.as_ref().unwrap());
+    // Capture the versioned record to return
+    let removed = if let Some((_, removed)) = self.store.remove(&version_key) {
+      Some(removed)
+    } else {
+      None
+    };
+
+    // If we removed something and the "latest" points to the same version, recompute latest
+    if let Some(ref removed_subject) = removed {
+      if let Some(latest) = self.store.get(&name.slug) {
+        // if latest version matches removed version, recompute latest from remaining versions
+        if latest.version == removed_subject.version {
+          drop(latest);
+          // find remaining versions for this slug
+          let prefix = format!("{}/", name.slug);
+          let mut candidates: Vec<AgentDefinition> = self
+            .store
+            .iter()
+            .filter_map(|kv| {
+              let k = kv.key();
+              if k.starts_with(&prefix) {
+                Some(kv.value().clone())
+              } else {
+                None
+              }
+            })
+            .collect();
+          // Select latest by semantic version ordering; fall back to string compare on parse errors
+          candidates.sort_by(|a, b| {
+            match (
+              semver::Version::parse(&a.version),
+              semver::Version::parse(&b.version),
+            ) {
+              (Ok(va), Ok(vb)) => va.cmp(&vb),
+              _ => a.version.cmp(&b.version),
+            }
+          });
+          let new_latest = candidates.pop();
+          if let Some(def) = new_latest {
+            self.store.insert(name.slug.clone(), def);
+          } else {
+            // no remaining versions; remove latest pointer
+            let _ = self.store.remove(&name.slug);
+          }
+        }
+      }
+    }
+
+    Ok(removed)
   }
 
+  /// Get supports versionless lookups: when version is None, return the latest (value under "slug").
   async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    if let Some(subject) = self.store.get(&name.to_string()) {
+    let key = if let Some(v) = &name.version {
+      format!("{}/{}", name.slug, v)
+    } else {
+      name.slug.clone()
+    };
+    if let Some(subject) = self.store.get(&key) {
       Ok(Some(subject.clone()))
     } else {
       Ok(None)
     }
   }
 
+  /// Has supports versionless lookups: when version is None, check "slug" key for latest.
   async fn has(&self, name: Self::Key) -> Result<bool> {
-    Ok(self.store.contains_key(&name.to_string()))
+    let key = if let Some(v) = &name.version {
+      format!("{}/{}", name.slug, v)
+    } else {
+      name.slug.clone()
+    };
+    Ok(self.store.contains_key(&key))
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
+    // Return all keys: latest pointers (plain "slug") and all versioned "slug/version" entries
     let mut keys: Vec<String> = self.store.iter().map(|kv| kv.key().to_string()).collect();
 
     // Sort for consistent pagination
@@ -59,7 +137,10 @@ impl Registry for MemoryAgentRegistry {
 
     // 1-based page, default to 1 if not provided
     let page = pagination.page.unwrap_or(1).max(1);
-    let per_page = pagination.per_page.unwrap_or(keys.len()).max(1);
+    let per_page = pagination
+      .per_page
+      .unwrap_or_else(|| keys.len().max(1))
+      .max(1);
 
     let start_index = (page - 1) * per_page;
     let end_index = std::cmp::min(start_index + per_page, keys.len());
@@ -112,7 +193,7 @@ mod tests {
     MemoryAgentRegistry::new()
   }
 
-  /// Test template function for agent registry
+  /// Test template function for agent registry (versioned paths)
   pub async fn test_agent_registry_basic_operations(
     registry: Arc<dyn Registry<Subject = AgentDefinition, Key = AgentRef>>,
   ) {
@@ -138,7 +219,7 @@ mod tests {
     // Test put another agent
     registry.put(key2.clone(), agent2.clone()).await.unwrap();
 
-    // Test keys (no pagination)
+    // Test keys (no pagination) should include both latest pointers and versioned keys
     let keys = registry
       .keys(Pagination {
         page: None,
@@ -146,7 +227,12 @@ mod tests {
       })
       .await
       .unwrap();
-    let mut expected_keys = vec![key1.to_string(), key2.to_string()];
+    let mut expected_keys = vec![
+      agent1.slug.clone(),
+      agent2.slug.clone(),
+      format!("{}/{}", agent1.slug, agent1.version),
+      format!("{}/{}", agent2.slug, agent2.version),
+    ];
     expected_keys.sort();
     assert_eq!(keys, expected_keys);
 
@@ -169,6 +255,114 @@ mod tests {
   async fn test_memory_agent_registry_basic_operations() {
     let registry = Arc::new(create_registry());
     test_agent_registry_basic_operations(registry).await;
+  }
+
+  #[tokio::test]
+  async fn test_memory_agent_registry_version_requirements() {
+    let registry = create_registry();
+    let agent = create_test_agent("vr-agent");
+    // versionless key (no version set)
+    let versionless_key = AgentRef::builder().slug(agent.slug.clone()).build();
+
+    // PUT without version should error
+    let res = registry.put(versionless_key.clone(), agent.clone()).await;
+    assert!(res.is_err(), "PUT without version should error");
+
+    // DEL without version should error
+    let res = registry.del(versionless_key.clone()).await;
+    assert!(res.is_err(), "DEL without version should error");
+  }
+
+  #[tokio::test]
+  async fn test_memory_agent_registry_versionless_get_has() {
+    let registry = create_registry();
+    // two versions for same slug, latest should end up as higher semver
+    let mut v1 = create_test_agent("ver-agent");
+    v1.version = "1.0.0".to_string();
+    v1.slug = "ver-agent".to_string();
+
+    let mut v2 = v1.clone();
+    v2.version = "1.1.0".to_string();
+
+    // put v1 then v2
+    registry.put(AgentRef::from(&v1), v1.clone()).await.unwrap();
+    registry.put(AgentRef::from(&v2), v2.clone()).await.unwrap();
+
+    // versionless GET should fetch latest (1.1.0)
+    let latest = registry
+      .get(AgentRef::builder().slug("ver-agent").build())
+      .await
+      .unwrap();
+    assert_eq!(latest.unwrap().version, "1.1.0");
+
+    // versionless HAS should be true
+    let has_latest = registry
+      .has(AgentRef::builder().slug("ver-agent").build())
+      .await
+      .unwrap();
+    assert!(has_latest);
+
+    // delete specific version (1.1.0) and ensure latest falls back to 1.0.0
+    let _ = registry
+      .del(
+        AgentRef::builder()
+          .slug("ver-agent")
+          .version("1.1.0")
+          .build(),
+      )
+      .await
+      .unwrap();
+    let latest_after = registry
+      .get(AgentRef::builder().slug("ver-agent").build())
+      .await
+      .unwrap();
+    assert_eq!(latest_after.unwrap().version, "1.0.0");
+  }
+
+  #[tokio::test]
+  async fn test_memory_agent_registry_versionless_get_has_latest_pointer() {
+    let registry = create_registry();
+    // two versions for same slug, latest should end up as higher semver
+    let mut v1 = create_test_agent("ver-agent");
+    v1.version = "1.0.0".to_string();
+    v1.slug = "ver-agent".to_string();
+
+    let mut v2 = v1.clone();
+    v2.version = "1.1.0".to_string();
+
+    // put v1 then v2
+    registry.put(AgentRef::from(&v1), v1.clone()).await.unwrap();
+    registry.put(AgentRef::from(&v2), v2.clone()).await.unwrap();
+
+    // versionless get should fetch latest (1.1.0)
+    let latest = registry
+      .get(AgentRef::builder().slug("ver-agent").build())
+      .await
+      .unwrap();
+    assert_eq!(latest.unwrap().version, "1.1.0");
+
+    // versionless has should be true
+    let has_latest = registry
+      .has(AgentRef::builder().slug("ver-agent").build())
+      .await
+      .unwrap();
+    assert!(has_latest);
+
+    // delete specific version (1.1.0) and ensure latest falls back to 1.0.0
+    let _ = registry
+      .del(
+        AgentRef::builder()
+          .slug("ver-agent")
+          .version("1.1.0")
+          .build(),
+      )
+      .await
+      .unwrap();
+    let latest_after = registry
+      .get(AgentRef::builder().slug("ver-agent").build())
+      .await
+      .unwrap();
+    assert_eq!(latest_after.unwrap().version, "1.0.0");
   }
 
   #[tokio::test]

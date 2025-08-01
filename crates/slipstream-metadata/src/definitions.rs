@@ -20,31 +20,40 @@ use crate::{EnumKind, Error};
 pub struct AgentRef {
   #[builder(setter(into))]
   pub slug: String,
-  #[builder(setter(into))]
-  pub version: String,
+  #[builder(default, setter(strip_option, into))]
+  pub version: Option<String>,
 }
 
+/// Display as "slug/version" if version is Some, else just "slug"
 impl Display for AgentRef {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}/{}", self.slug, self.version)
+    if let Some(version) = &self.version {
+      write!(f, "{}/{}", self.slug, version)
+    } else {
+      write!(f, "{}", self.slug)
+    }
   }
 }
 
+/// Accepts "slug" or "slug/version"
 impl FromStr for AgentRef {
   type Err = Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let parts: Vec<&str> = s.split('/').collect();
-    if parts.len() != 2 {
-      Err(Error::InvalidRef {
-        kind: "agent",
-        reason: "expected format 'slug/version'",
-      })
-    } else {
-      Ok(AgentRef {
+    match parts.len() {
+      1 => Ok(AgentRef {
         slug: parts[0].to_string(),
-        version: parts[1].to_string(),
-      })
+        version: None,
+      }),
+      2 => Ok(AgentRef {
+        slug: parts[0].to_string(),
+        version: Some(parts[1].to_string()),
+      }),
+      _ => Err(Error::InvalidRef {
+        kind: "agent",
+        reason: "expected format 'slug' or 'slug/version'",
+      }),
     }
   }
 }
@@ -106,7 +115,7 @@ impl From<AgentDefinition> for AgentRef {
   fn from(value: AgentDefinition) -> Self {
     Self {
       slug: value.slug.clone(),
-      version: value.version.clone(),
+      version: Some(value.version.clone()),
     }
   }
 }
@@ -115,7 +124,7 @@ impl From<&AgentDefinition> for AgentRef {
   fn from(value: &AgentDefinition) -> Self {
     Self {
       slug: value.slug.clone(),
-      version: value.version.clone(),
+      version: Some(value.version.clone()),
     }
   }
 }
@@ -144,19 +153,17 @@ impl validator::Validate for ToolRef {
   fn validate(&self) -> Result<(), validator::ValidationErrors> {
     let mut errors = validator::ValidationErrors::new();
 
-    // Validate slug
     if self.slug.len() < 3 {
       let mut error = validator::ValidationError::new("length");
       error.message = Some("Tool slug cannot be empty".into());
       errors.add("slug", error);
     }
 
-    // Validate version presence and length
-    match &self.version {
-      Some(v) if v.len() >= 1 => {}
-      _ => {
+    // Version is now optional, so do not require it
+    if let Some(v) = &self.version {
+      if v.is_empty() {
         let mut error = validator::ValidationError::new("length");
-        error.message = Some("Tool version cannot be empty".into());
+        error.message = Some("Tool version cannot be empty if specified".into());
         errors.add("version", error);
       }
     }
@@ -721,6 +728,31 @@ mod tests {
     assert_eq!(agent.name, "minimal-agent");
     assert!(agent.description.is_none());
     assert!(agent.available_tools.is_empty());
+  }
+
+  #[test]
+  fn test_agent_ref_from_str() {
+    let a = AgentRef::from_str("foo").unwrap();
+    assert_eq!(a.slug, "foo");
+    assert_eq!(a.version, None);
+
+    let b = AgentRef::from_str("foo/1.2.3").unwrap();
+    assert_eq!(b.slug, "foo");
+    assert_eq!(b.version, Some("1.2.3".to_string()));
+  }
+
+  #[test]
+  fn test_agent_ref_display() {
+    let a = AgentRef {
+      slug: "foo".to_string(),
+      version: None,
+    };
+    assert_eq!(a.to_string(), "foo");
+    let b = AgentRef {
+      slug: "foo".to_string(),
+      version: Some("1.2.3".to_string()),
+    };
+    assert_eq!(b.to_string(), "foo/1.2.3");
   }
 
   #[test]

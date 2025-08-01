@@ -1,12 +1,13 @@
+import { compare } from "semver";
 import slug from "slug";
 
 // Extend slug with custom character mappings for common symbols
 slug.extend({
-  '@': '-at-',
-  '#': '-hash-',
-  '_': '-',
-  '&': '-and-',
-  '+': '-plus-'
+  "@": "-at-",
+  "#": "-hash-",
+  _: "-",
+  "&": "-and-",
+  "+": "-plus-",
 });
 
 /**
@@ -16,7 +17,7 @@ slug.extend({
  */
 export function generateSlug(name: string): string {
   if (!name || name.trim().length === 0) {
-    throw new Error('Name cannot be empty');
+    throw new Error("Name cannot be empty");
   }
 
   // Generate slug and clean up multiple consecutive dashes
@@ -30,4 +31,12 @@ export function generateSlug(name: string): string {
  */
 export function isValidSlug(slug: string): boolean {
   return /^[a-z0-9-_]{3,}$/.test(slug);
+}
+
+/**
+ * Compare two semantic version strings using the semver library
+ * Returns: -1 if versionA < versionB, 0 if equal, 1 if versionA > versionB
+ */
+export function compareSemVer(versionA: string, versionB: string): number {
+  return compare(versionA, versionB);
 }

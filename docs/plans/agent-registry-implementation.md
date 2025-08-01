@@ -1,5 +1,57 @@
 # Agent Registry Implementation Specification
 
+## Version Handling Semantics (Agents and Tools)
+
+Key principle:
+- GET and HAS must support versionless lookups (return/check the latest version if version is omitted).
+- PUT and DEL must require an explicit version.
+
+Backends and locations:
+- HTTP backend (reference):
+  - Agents: [`crates/slipstream-metadata/src/http/http_agent.rs`](crates/slipstream-metadata/src/http/http_agent.rs:1)
+  - Tools: [`crates/slipstream-metadata/src/http/http_tool.rs`](crates/slipstream-metadata/src/http/http_tool.rs:1)
+- Memory backend:
+  - Agents: [`crates/slipstream-metadata/src/memory/memory_agent.rs`](crates/slipstream-metadata/src/memory/memory_agent.rs:1)
+  - Tools: [`crates/slipstream-metadata/src/memory/memory_tool.rs`](crates/slipstream-metadata/src/memory/memory_tool.rs:1)
+- NATS backend:
+  - Agents: [`crates/slipstream-metadata/src/nats/agent.rs`](crates/slipstream-metadata/src/nats/agent.rs:1)
+  - Tools: [`crates/slipstream-metadata/src/nats/tool.rs`](crates/slipstream-metadata/src/nats/tool.rs:1)
+
+Storage keys and “latest” pointers:
+- Agents:
+  - Versioned records are stored under "slug/version"
+  - Latest pointer stored at "slug"
+- Tools:
+  - Versioned records are stored under "provider/slug/version"
+  - Latest pointer stored at "provider/slug"
+
+Operation behavior:
+- GET(key) where key.version is None:
+  - Agents: returns the subject stored at key "slug" (latest)
+  - Tools: returns the subject stored at key "provider/slug" (latest)
+- HAS(key) where key.version is None:
+  - Checks existence of the same latest pointer keys as above
+- PUT(key, subject):
+  - Requires key.version to be Some. Writes the versioned record and updates the latest pointer to this subject
+- DEL(key):
+  - Requires key.version to be Some. Deletes the versioned record; if the deleted version was the latest, recomputes the latest by selecting the highest remaining semantic version (numerical dot comparison; lexical fallback). If none remain, removes the latest pointer.
+
+Types:
+- AgentRef.version: Option<String> (optional)
+- ToolRef.version: Option<String> (optional)
+- AgentDefinition.version and ToolDefinition.version remain required.
+
+Testing:
+- Ensure both versioned and versionless GET/HAS are covered.
+- Ensure PUT/DEL are rejected without a version.
+- Ensure deletion of the current latest reassigns latest to the highest remaining version (or removes pointer if none).
+
+Implementation notes:
+- Memory backend uses in-memory DashMap with explicit “latest” keys.
+- NATS backend uses KV entries and maintains “latest” keys; recomputes latest by scanning keys with a prefix.
+- HTTP backend delegates to server routes that already support versionless GET/HAS and require versions for PUT/DEL.
+
+
 ## Overview
 This document provides the implementation specification for the Agent Registry API using Chanfana's D1AutoEndpoint pattern with Hono.
 

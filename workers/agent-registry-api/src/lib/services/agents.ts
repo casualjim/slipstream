@@ -1,3 +1,4 @@
+import { parse, rcompare } from "semver";
 import type { Agent } from "../../types";
 
 export class AgentService {
@@ -71,7 +72,16 @@ export class AgentService {
       availableTools: agent.availableTools ? JSON.stringify(agent.availableTools) : null,
     };
 
-    await this.db
+    console.log("[AgentService.create] inserting:", {
+      slug: data.slug,
+      version: data.version,
+      organization: data.organization,
+      project: data.project,
+      model: data.model,
+      hasTools: !!data.availableTools,
+    });
+
+    const res = await this.db
       .prepare(
         `INSERT INTO agents (slug, version, name, description, model, instructions, availableTools, organization, project, createdBy, updatedBy, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -92,6 +102,16 @@ export class AgentService {
         data.updatedAt,
       )
       .run();
+
+    console.log("[AgentService.create] insert result:", res);
+
+    // Verify write visibility immediately
+    const check = await this.db
+      .prepare("SELECT slug, version, organization, project FROM agents WHERE slug = ? ORDER BY createdAt ASC")
+      .bind(data.slug)
+      .all();
+
+    console.log("[AgentService.create] post-insert rows for slug:", data.slug, check.results);
 
     return { success: true, result: agent };
   }
@@ -122,5 +142,77 @@ export class AgentService {
     await this.db.prepare("DELETE FROM agents WHERE slug = ? AND version = ?").bind(slug, version).run();
 
     return { success: true };
+  }
+
+  async getLatestBySlug(slug: string): Promise<Agent | null> {
+    const result = await this.db
+      .prepare(
+        "SELECT slug, version, name, description, model, instructions, availableTools, organization, project, createdBy, updatedBy, createdAt, updatedAt FROM agents WHERE slug = ?",
+      )
+      .bind(slug)
+      .all<Agent>();
+
+    const agents = (result.results || []) as Agent[];
+
+    // Debug: log all candidate versions
+    try {
+      console.log("[AgentService.getLatestBySlug] candidates:", agents.map(a => a.version));
+    } catch {}
+
+    if (agents.length === 0) {
+      return null;
+    }
+
+    // Separate stable and pre-release versions using semver parse
+    const stable: Agent[] = [];
+    const prerelease: Agent[] = [];
+
+    for (const a of agents) {
+      const v = parse(a.version, { includePrerelease: true });
+      if (!v) {
+        // Skip non-semver entries defensively
+        continue;
+      }
+      if (v.prerelease.length === 0) {
+        stable.push(a);
+      } else {
+        prerelease.push(a);
+      }
+    }
+
+    const pickLatest = (arr: Agent[]): Agent | null => {
+      if (arr.length === 0) return null;
+      // Sort descending using semver rcompare (handles build metadata precedence rules)
+      const sorted = [...arr].sort((a, b) => rcompare(a.version, b.version));
+      return sorted[0] ?? null;
+    };
+
+    // Prefer latest stable, otherwise latest prerelease
+    const latestStable = pickLatest(stable);
+    const chosen = latestStable ?? pickLatest(prerelease);
+
+    try {
+      console.log(
+        "[AgentService.getLatestBySlug] stable:",
+        stable.map(a => a.version),
+        "prerelease:",
+        prerelease.map(a => a.version),
+        "chosen:",
+        chosen?.version,
+      );
+    } catch {}
+
+    if (!chosen) return null;
+
+    // Parse JSON fields
+    if (chosen.availableTools && typeof chosen.availableTools === "string") {
+      try {
+        chosen.availableTools = JSON.parse(chosen.availableTools as string);
+      } catch {
+        // fall back silently
+      }
+    }
+
+    return chosen;
   }
 }

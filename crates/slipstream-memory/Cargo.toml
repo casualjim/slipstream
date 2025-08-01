@@ -13,6 +13,7 @@ lancedb.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+slipstream-ai = { path = "../slipstream-ai" }
 slipstream-store = { path = "../slipstream-store" }
 thiserror.workspace = true
 time.workspace = true

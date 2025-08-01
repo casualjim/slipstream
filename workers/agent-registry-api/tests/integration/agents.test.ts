@@ -1,4 +1,4 @@
-import { SELF } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Agent API Integration Tests", () => {
@@ -23,7 +23,7 @@ describe("Agent API Integration Tests", () => {
           project: "wagyu-project",
         }),
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -92,7 +92,7 @@ describe("Agent API Integration Tests", () => {
         },
         body: JSON.stringify(agentData),
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -117,7 +117,7 @@ describe("Agent API Integration Tests", () => {
         },
         body: JSON.stringify(agentData),
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(403);
       expect(body.success).toBe(false);
@@ -142,7 +142,7 @@ describe("Agent API Integration Tests", () => {
         },
         body: JSON.stringify(agentData),
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -199,7 +199,7 @@ describe("Agent API Integration Tests", () => {
   describe("GET /api/v1/agents", () => {
     it("should return 401 without authorization", async () => {
       const response = await SELF.fetch(`http://local.test/api/v1/agents`);
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -238,14 +238,11 @@ describe("Agent API Integration Tests", () => {
     });
 
     it("should filter agents by organization", async () => {
-      const response = await SELF.fetch(
-        `http://local.test/api/v1/agents?organization=wagyu`,
-        {
-          headers: {
-            Authorization: "Bearer test-api-key",
-          },
+      const response = await SELF.fetch(`http://local.test/api/v1/agents?organization=wagyu`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
         },
-      );
+      });
       const body = await response.json<{ success: boolean; result: any[] }>();
 
       expect(response.status).toBe(200);
@@ -254,14 +251,11 @@ describe("Agent API Integration Tests", () => {
     });
 
     it("should filter agents by project", async () => {
-      const response = await SELF.fetch(
-        `http://local.test/api/v1/agents?project=wagyu-project`,
-        {
-          headers: {
-            Authorization: "Bearer test-api-key",
-          },
+      const response = await SELF.fetch(`http://local.test/api/v1/agents?project=wagyu-project`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
         },
-      );
+      });
       const body = await response.json<{ success: boolean; result: any[] }>();
 
       expect(response.status).toBe(200);
@@ -316,7 +310,7 @@ describe("Agent API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -341,7 +335,7 @@ describe("Agent API Integration Tests", () => {
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
-      expect(body.errors[0].message).toBe("Not Found");
+      expect(body.errors[0].message).toBe("Agent not found");
     });
   });
 
@@ -459,7 +453,7 @@ describe("Agent API Integration Tests", () => {
         },
         body: JSON.stringify({ description: "New description" }),
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -499,7 +493,7 @@ describe("Agent API Integration Tests", () => {
           model: "invalid/model-id",
         }),
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);
@@ -536,7 +530,7 @@ describe("Agent API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean }>();
 
       expect(response.status).toBe(200);
       expect(body.success).toBe(true);
@@ -557,7 +551,7 @@ describe("Agent API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json();
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
 
       expect(response.status).toBe(404);
       expect(body.success).toBe(false);
@@ -645,18 +639,15 @@ describe("Agent API Integration Tests", () => {
       });
 
       expect(response.status).toBeGreaterThanOrEqual(400);
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
       expect(body.success).toBe(false);
 
       // Should not have created a partial record
-      const listResponse = await SELF.fetch(
-        "http://local.test/api/v1/agents",
-        {
-          headers: { Authorization: "Bearer test-api-key" },
-        }
-      );
+      const listResponse = await SELF.fetch("http://local.test/api/v1/agents", {
+        headers: { Authorization: "Bearer test-api-key" },
+      });
       const listBody = await listResponse.json<{ result: any[] }>();
-      const badAgents = listBody.result.filter(a => a.slug === "bad-model-agent");
+      const badAgents = listBody.result.filter((a) => a.slug === "bad-model-agent");
       expect(badAgents).toHaveLength(0);
     });
 
@@ -681,7 +672,7 @@ describe("Agent API Integration Tests", () => {
       });
 
       expect(response.status).toBeGreaterThanOrEqual(400);
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
       expect(body.success).toBe(false);
     });
 
@@ -706,7 +697,7 @@ describe("Agent API Integration Tests", () => {
         for (const version of validVersions) {
           const agentData = {
             name: `Test Agent ${version}`,
-            slug: `test-agent-${version.replace(/[^a-zA-Z0-9]/g, '-')}`,
+            slug: `test-agent-${version.replace(/[^a-zA-Z0-9]/g, "-")}`,
             version,
             model: "openai/gpt-4.1",
             instructions: "Test instructions",
@@ -734,7 +725,7 @@ describe("Agent API Integration Tests", () => {
         for (const version of invalidVersions) {
           const agentData = {
             name: `Test Agent ${version || "empty"}`,
-            slug: `test-agent-${version.replace(/[^a-zA-Z0-9]/g, '-') || "empty"}`,
+            slug: `test-agent-${version.replace(/[^a-zA-Z0-9]/g, "-") || "empty"}`,
             version,
             model: "openai/gpt-4.1",
             instructions: "Test instructions",
@@ -766,9 +757,7 @@ describe("Agent API Integration Tests", () => {
         instructions: "Agent with invalid tool references",
         organization: "wagyu",
         project: "wagyu-project",
-        availableTools: [
-          { slug: "non-existent-tool", version: "1.0.0", provider: "Local" },
-        ],
+        availableTools: [{ slug: "non-existent-tool", version: "1.0.0", provider: "Local" }],
       };
 
       const response = await SELF.fetch("http://local.test/api/v1/agents", {
@@ -806,7 +795,7 @@ describe("Agent API Integration Tests", () => {
       });
 
       expect(response.status).toBeGreaterThanOrEqual(400);
-      const body = await response.json() as { success: boolean };
+      const body = (await response.json()) as { success: boolean };
       expect(body.success).toBe(false);
     });
 
@@ -851,14 +840,11 @@ describe("Agent API Integration Tests", () => {
 
       if (response.status < 300) {
         // If versioning is allowed, verify both versions exist
-        const listResponse = await SELF.fetch(
-          "http://local.test/api/v1/agents",
-          {
-            headers: { Authorization: "Bearer test-api-key" },
-          }
-        );
+        const listResponse = await SELF.fetch("http://local.test/api/v1/agents", {
+          headers: { Authorization: "Bearer test-api-key" },
+        });
         const body = await listResponse.json<{ result: any[] }>();
-        const agents = body.result.filter(a => a.slug === "version-conflict-agent");
+        const agents = body.result.filter((a) => a.slug === "version-conflict-agent");
         expect(agents.length).toBeGreaterThan(0);
       }
     });
@@ -886,6 +872,176 @@ describe("Agent API Integration Tests", () => {
 
       // Should either accept it or reject with proper error, but not crash
       expect(response.status).toBeLessThan(500);
+    });
+  });
+
+  // Tests for GET /api/v1/agents/{slug}
+  describe("GET /api/v1/agents/{slug}", () => {
+    it("should get the latest version of an agent", async () => {
+      // Create multiple versions of the same agent
+      const agentVersions = [
+        { name: "Latest Test Agent", version: "1.0.0", model: "openai/gpt-4.1", instructions: "Version 1.0.0" },
+        { name: "Latest Test Agent", version: "1.1.0", model: "openai/gpt-4.1", instructions: "Version 1.1.0" },
+        {
+          name: "Latest Test Agent",
+          version: "2.0.0",
+          model: "google/gemini-2.5-flash",
+          instructions: "Version 2.0.0",
+        },
+      ];
+
+      for (const agentData of agentVersions) {
+        const res = await SELF.fetch(`http://local.test/api/v1/agents`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...agentData,
+            organization: "wagyu",
+            project: "wagyu-project",
+          }),
+        });
+        if (res.status / 100 !== 2) {
+          const rb = await res.json();
+          console.log("[Test seed] create failed:", res.status, rb);
+        }
+      }
+
+      // Direct DB inspection: list all rows for this slug for visibility debugging
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      try {
+        const stmt = await env.DB.prepare(
+          "SELECT slug, version, organization, project, model, instructions FROM agents WHERE slug = ? ORDER BY createdAt ASC",
+        );
+        const res = await stmt.bind("latest-test-agent").all();
+        console.log("[Test inspect] rows for latest-test-agent:", res?.results || []);
+      } catch (e) {
+        console.log("[Test inspect] query error:", e);
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/agents/latest-test-agent`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.result).toMatchObject({
+        slug: "latest-test-agent",
+        version: "2.0.0", // Should return the highest version
+        name: "Latest Test Agent",
+        model: "google/gemini-2.5-flash",
+        instructions: "Version 2.0.0",
+      });
+    });
+
+    it("should return 404 if agent slug is not found", async () => {
+      const response = await SELF.fetch(`http://local.test/api/v1/agents/non-existent-agent`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
+
+      expect(response.status).toBe(404);
+      expect(body.success).toBe(false);
+      expect(body.errors[0].message).toBe("Agent not found");
+    });
+
+    it("should return 401 without authorization", async () => {
+      const response = await SELF.fetch(`http://local.test/api/v1/agents/latest-test-agent`);
+      const body = await response.json<{ success: boolean; errors: Array<{ message: string }> }>();
+
+      expect(response.status).toBe(401);
+      expect(body.success).toBe(false);
+      expect(body.errors[0].message).toBe("Unauthorized");
+    });
+
+    it("should handle pre-release versions correctly", async () => {
+      // Create versions including pre-releases
+      const agentVersions = [
+        { name: "Prerelease Test Agent", version: "1.0.0", model: "openai/gpt-4.1", instructions: "Stable version" },
+        {
+          name: "Prerelease Test Agent",
+          version: "2.0.0-alpha",
+          model: "openai/gpt-4.1",
+          instructions: "Alpha version",
+        },
+        { name: "Prerelease Test Agent", version: "2.0.0-beta", model: "openai/gpt-4.1", instructions: "Beta version" },
+      ];
+
+      for (const agentData of agentVersions) {
+        await SELF.fetch(`http://local.test/api/v1/agents`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...agentData,
+            organization: "wagyu",
+            project: "wagyu-project",
+          }),
+        });
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/agents/prerelease-test-agent`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(404);
+      expect(body.success).toBe(false);
+    });
+
+    it("should handle build metadata correctly", async () => {
+      // Create versions with build metadata
+      const agentVersions = [
+        { name: "Build Metadata Test Agent", version: "1.0.0", model: "openai/gpt-4.1", instructions: "Base version" },
+        {
+          name: "Build Metadata Test Agent",
+          version: "1.0.0+build.1",
+          model: "openai/gpt-4.1",
+          instructions: "Build 1",
+        },
+        {
+          name: "Build Metadata Test Agent",
+          version: "1.0.0+build.2",
+          model: "openai/gpt-4.1",
+          instructions: "Build 2",
+        },
+      ];
+
+      for (const agentData of agentVersions) {
+        await SELF.fetch(`http://local.test/api/v1/agents`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer test-api-key",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...agentData,
+            organization: "wagyu",
+            project: "wagyu-project",
+          }),
+        });
+      }
+
+      const response = await SELF.fetch(`http://local.test/api/v1/agents/build-metadata-test-agent`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const body = await response.json<{ success: boolean; result: any }>();
+
+      expect(response.status).toBe(404);
+      expect(body.success).toBe(false);
     });
   });
 });

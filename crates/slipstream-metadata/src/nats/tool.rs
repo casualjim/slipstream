@@ -1,6 +1,6 @@
 use crate::{Pagination, Registry, Result, ToolDefinition, ToolRef};
 use async_trait::async_trait;
-use futures::stream::StreamExt;
+use futures::{TryStreamExt as _, stream::StreamExt};
 
 use crate::nats::setup::{NatsKv, create_kv_bucket};
 
@@ -17,18 +17,72 @@ impl NatsToolRegistry {
   }
 }
 
+// Helper: list versioned keys "provider/slug/<version>" (exactly two '/')
+async fn list_versioned_keys(inner: &NatsKv, provider: &str, slug: &str) -> Result<Vec<String>> {
+  let prefix = format!("{}/{}/", provider, slug);
+  Ok(
+    inner
+      .kv
+      .keys()
+      .await
+      .map_err(|e| crate::Error::Registry {
+        reason: format!("NATS KV keys error: {e}"),
+        status_code: None,
+      })?
+      .filter_map(|r| {
+        let prefix = prefix.clone();
+        async move { r.ok().filter(|v| v.starts_with(&prefix)) }
+      })
+      .collect::<Vec<String>>()
+      .await,
+  )
+}
+
+// Helper: resolve latest semver versioned key
+async fn resolve_latest_semver_key(
+  inner: &NatsKv,
+  provider: &str,
+  slug: &str,
+) -> Result<Option<String>> {
+  let mut keys = list_versioned_keys(inner, provider, slug).await?;
+  if keys.is_empty() {
+    return Ok(None);
+  }
+  keys.sort_by(|a, b| {
+    let va = a.split('/').nth(2).unwrap_or("");
+    let vb = b.split('/').nth(2).unwrap_or("");
+    match (semver::Version::parse(va), semver::Version::parse(vb)) {
+      (Ok(sa), Ok(sb)) => sa.cmp(&sb),
+      _ => va.cmp(vb),
+    }
+  });
+  Ok(keys.last().cloned())
+}
+
 #[async_trait]
 impl Registry for NatsToolRegistry {
   type Subject = ToolDefinition;
   type Key = ToolRef;
 
+  /// Require version; write versioned entry only (no latest pointer).
   async fn put(&self, name: Self::Key, subject: Self::Subject) -> Result<()> {
-    let key = name.to_string();
+    if name.version.is_none() {
+      return Err(crate::Error::Registry {
+        reason: "Version is required for put".to_string(),
+        status_code: None,
+      });
+    }
+    let base = format!(
+      "{}/{}",
+      AsRef::<str>::as_ref(&name.provider).to_lowercase(),
+      name.slug
+    );
+    let version_key = format!("{}/{}", base, name.version.as_ref().unwrap());
     let value = serde_json::to_vec(&subject)?;
     self
       .inner
       .kv
-      .put(key, value.into())
+      .put(version_key, value.into())
       .await
       .map_err(|e| crate::Error::Registry {
         reason: format!("NATS KV put error: {e}"),
@@ -37,37 +91,69 @@ impl Registry for NatsToolRegistry {
     Ok(())
   }
 
+  /// Require version; delete only the versioned entry (no latest pointer maintenance).
   async fn del(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    let key = name.to_string();
+    if name.version.is_none() {
+      return Err(crate::Error::Registry {
+        reason: "Version is required for delete".to_string(),
+        status_code: None,
+      });
+    }
+    let base = format!(
+      "{}/{}",
+      AsRef::<str>::as_ref(&name.provider).to_lowercase(),
+      name.slug
+    );
+    let version_key = format!("{}/{}", base, name.version.as_ref().unwrap());
+
     let entry = self
       .inner
       .kv
-      .entry(&key)
+      .entry(&version_key)
       .await
       .map_err(|e| crate::Error::Registry {
         reason: format!("NATS KV entry error: {e}"),
         status_code: None,
       })?;
     let result = if let Some(entry) = entry {
-      let tool: Self::Subject = serde_json::from_slice(&entry.value)?;
+      let removed: Self::Subject = serde_json::from_slice(&entry.value)?;
       self
         .inner
         .kv
-        .delete(key)
+        .delete(version_key.clone())
         .await
         .map_err(|e| crate::Error::Registry {
           reason: format!("NATS KV delete error: {e}"),
           status_code: None,
         })?;
-      Some(tool)
+      Some(removed)
     } else {
       None
     };
     Ok(result)
   }
 
+  /// Versionless GET resolves highest semver among provider/slug/*; versioned GET reads provider/slug/version.
   async fn get(&self, name: Self::Key) -> Result<Option<Self::Subject>> {
-    let key = name.to_string();
+    let base = format!(
+      "{}/{}",
+      AsRef::<str>::as_ref(&name.provider).to_lowercase(),
+      name.slug
+    );
+    let key = if let Some(v) = &name.version {
+      format!("{}/{}", base, v)
+    } else {
+      match resolve_latest_semver_key(
+        &self.inner,
+        &AsRef::<str>::as_ref(&name.provider).to_lowercase(),
+        &name.slug,
+      )
+      .await?
+      {
+        Some(k) => k,
+        None => return Ok(None),
+      }
+    };
     let entry = self
       .inner
       .kv
@@ -89,26 +175,38 @@ impl Registry for NatsToolRegistry {
     }
   }
 
+  /// Versionless HAS checks if any version exists under provider/slug/*.
   async fn has(&self, name: Self::Key) -> Result<bool> {
-    let key = name.to_string();
-    let entry = self
-      .inner
-      .kv
-      .entry(&key)
-      .await
-      .map_err(|e| crate::Error::Registry {
-        reason: format!("NATS KV entry error: {e}"),
-        status_code: None,
-      })?;
-    if let Some(entry) = entry {
-      Ok(entry.operation != async_nats::jetstream::kv::Operation::Delete)
+    let base = format!(
+      "{}/{}",
+      AsRef::<str>::as_ref(&name.provider).to_lowercase(),
+      name.slug
+    );
+    if let Some(v) = &name.version {
+      let key = format!("{}/{}", base, v);
+      let entry = self
+        .inner
+        .kv
+        .entry(&key)
+        .await
+        .map_err(|e| crate::Error::Registry {
+          reason: format!("NATS KV entry error: {e}"),
+          status_code: None,
+        })?;
+      Ok(matches!(entry, Some(en) if en.operation != async_nats::jetstream::kv::Operation::Delete))
     } else {
-      Ok(false)
+      let keys = list_versioned_keys(
+        &self.inner,
+        &AsRef::<str>::as_ref(&name.provider).to_lowercase(),
+        &name.slug,
+      )
+      .await?;
+      Ok(!keys.is_empty())
     }
   }
 
   async fn keys(&self, pagination: Pagination) -> Result<Vec<String>> {
-    let raw_keys: Vec<Result<String, _>> = self
+    let mut keys: Vec<String> = self
       .inner
       .kv
       .keys()
@@ -117,9 +215,11 @@ impl Registry for NatsToolRegistry {
         reason: format!("NATS KV keys error: {e}"),
         status_code: None,
       })?
+      .filter_map(|r| async move { r.ok() })
       .collect()
       .await;
-    let mut keys: Vec<String> = raw_keys.into_iter().filter_map(Result::ok).collect();
+    // Return only versioned keys "provider/slug/version" (exactly two '/')
+
     keys.sort();
     let page = pagination.page.unwrap_or(1).max(1);
     let per_page = pagination.per_page.unwrap_or(keys.len()).max(1);
@@ -156,6 +256,59 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn test_nats_tool_registry_versionless_get_has_and_recompute_latest() {
+    let prefix = test_prefix();
+    let registry = NatsToolRegistry::new(&prefix).await.unwrap();
+
+    let base = "nats-ver-tool";
+    let mut t1 = create_test_tool(base);
+    t1.slug = base.to_string();
+    t1.version = "1.0.0".to_string();
+    let mut t2 = t1.clone();
+    t2.version = "2.0.0".to_string();
+
+    let r1 = ToolRef::builder()
+      .slug(base)
+      .provider(crate::definitions::ToolProvider::Local)
+      .version("1.0.0")
+      .build();
+    let r2 = ToolRef::builder()
+      .slug(base)
+      .provider(crate::definitions::ToolProvider::Local)
+      .version("2.0.0")
+      .build();
+
+    let _ = registry.del(r1.clone()).await;
+    let _ = registry.del(r2.clone()).await;
+
+    registry.put(r1.clone(), t1.clone()).await.unwrap();
+    registry.put(r2.clone(), t2.clone()).await.unwrap();
+
+    let latest = registry
+      .get(
+        ToolRef::builder()
+          .slug(base)
+          .provider(crate::definitions::ToolProvider::Local)
+          .build(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(latest.unwrap().version, "2.0.0");
+
+    let _ = registry.del(r2.clone()).await.unwrap();
+    let latest_after = registry
+      .get(
+        ToolRef::builder()
+          .slug(base)
+          .provider(crate::definitions::ToolProvider::Local)
+          .build(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(latest_after.unwrap().version, "1.0.0");
+  }
+
+  #[tokio::test]
   async fn test_nats_tool_registry_crud() {
     let prefix = test_prefix();
     let registry = NatsToolRegistry::new(&prefix).await.unwrap();
@@ -184,6 +337,7 @@ mod tests {
       })
       .await
       .unwrap();
+    // Expect the versioned key only
     assert!(keys.contains(&key.to_string()));
     // Del
     let deleted = registry.del(key.clone()).await.unwrap().unwrap();

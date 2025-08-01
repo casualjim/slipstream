@@ -32,3 +32,4 @@ tokio.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
 validator.workspace = true
+semver = { version = "1", features = ["serde"] }
