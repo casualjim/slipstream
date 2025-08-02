@@ -1,15 +1,16 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use async_stream::try_stream;
-use futures::StreamExt as _;
+use futures::{StreamExt as _, join};
 use slipstream_metadata::{
   AgentDefinition, AgentRef, ModelDefinition, Provider, Store, ToolDefinition, ToolRef,
 };
+use tokio::try_join;
 use uuid::Uuid;
 
 use crate::{
-  Error, ExecutionContext, Executor, Prompt, ProviderConfig, Result, ResultStream, StreamError,
-  StreamEvent, executor::ExecutorConfig,
+  Agent, AgentToolHandler, Error, ExecutionContext, Executor, Prompt, ProviderConfig, Result,
+  ResultStream, StreamError, StreamEvent, agent, completer::Completer, executor::ExecutorConfig,
 };
 
 pub struct Engine {
@@ -102,6 +103,39 @@ impl Engine {
     Ok(())
   }
 
+  async fn validate_provider_config(
+    &self,
+    model_definition: &ModelDefinition,
+  ) -> Result<ProviderConfig> {
+    let provider_name = model_definition.provider;
+    self
+      .providers
+      .get(&provider_name)
+      .ok_or_else(|| Error::UnknownProvider(provider_name.to_string()))
+      .map(|entry| entry.clone())
+  }
+
+  fn build_agent_from_definition(&self, agent_def: AgentDefinition) -> Arc<dyn Agent> {
+    unimplemented!(
+      "Agent instantiation {} logic based on AgentDefinition",
+      agent_def.slug
+    )
+  }
+
+  fn build_tool_from_definition(&self, tool_def: ToolDefinition) -> Arc<agent::AgentTool> {
+    unimplemented!(
+      "Tool instantiation {} logic based on ToolDefinition",
+      tool_def.slug
+    )
+  }
+
+  fn build_completer_from_provider(&self, provider: &ProviderConfig) -> Arc<dyn Completer> {
+    unimplemented!(
+      "Completer instantiation logic based on Provider {}",
+      provider.name
+    )
+  }
+
   pub async fn execute(
     &self,
     agent: impl AsRef<str>,
@@ -112,20 +146,30 @@ impl Engine {
     let agent_ref: AgentRef = agent.as_ref().parse()?;
     let agent_definition = self.validate_agent(&agent_ref).await?;
 
-    let model_definition = self.validate_model(&agent_definition).await?;
+    let (model_definition, _) = try_join!(
+      self.validate_model(&agent_definition),
+      self.validate_agent_tools(&agent_definition)
+    )?;
 
-    let provider_name = model_definition.provider;
-    let _provider_config = self
-      .providers
-      .get(&provider_name)
-      .ok_or_else(|| Error::UnknownProvider(provider_name.to_string()))?
-      .clone();
+    let _provider_config = self.validate_provider_config(&model_definition).await?;
 
-    self.validate_agent_tools(&agent_definition).await?;
+    for key in self.meta.agents().keys(Default::default()).await? {
+      let agent = self.meta.agents().get(key.try_into()?).await?.unwrap();
+      context.register_agent((&agent).into(), self.build_agent_from_definition(agent));
+    }
 
-    // TODO: convert all agent definitions to Agent instances and register on the context
-    // TODO: convert all tools to AgentTool instances and register on the context
-    // TODO: convert all providers to Completer instances and register on the context
+    for key in self.meta.tools().keys(Default::default()).await? {
+      let tool_ref = ToolRef::from_str(&key).map_err(|e| Error::AgentTool(e.to_string()))?;
+      let tool = self.meta.tools().get(tool_ref.clone()).await?.unwrap();
+      context.register_tool(tool_ref, self.build_tool_from_definition(tool));
+    }
+
+    for provider in self.providers.iter() {
+      context.register_provider(
+        provider.key().clone(),
+        self.build_completer_from_provider(provider.value()),
+      );
+    }
 
     // Carry a single run_id through the entire run
     let run_id = Uuid::now_v7();

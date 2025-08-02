@@ -15,7 +15,7 @@ pub use definitions::*;
 pub use error::*;
 pub use store::Store;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Pagination {
   pub page: Option<usize>,
   pub per_page: Option<usize>,
