@@ -11,13 +11,12 @@
     "test": "vitest run --config tests/vitest.config.mts"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^7.1.1",
-    "chanfana": "^2.8.1",
+    "@hono/zod-openapi": "^1.0.2",
     "hono": "^4.8.8",
     "semver": "^7.7.2",
     "slug": "^11.0.0",
     "uuid": "^11.1.0",
-    "zod": "3.25.76"
+    "zod": "4.0.14"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.8.44",

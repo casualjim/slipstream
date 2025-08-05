@@ -19,16 +19,6 @@
   ],
   "vars": {},
   // Durable Object bindings for event streaming
-  "durable_objects": {
-    "bindings": [{ "name": "EVENT_HUB", "class_name": "EventHub" }]
-  },
-  // Durable Object migrations
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_classes": ["EventHub"]
-    }
-  ],
   "env": {
     "preview": {
       "d1_databases": [

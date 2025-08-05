@@ -1,0 +1,13 @@
+[{
+	"resource": "/Users/ivan/github/casualjim/slipstream/workers/agent-registry-api/src/routes/tools.routes.ts",
+	"owner": "typescript",
+	"code": "2345",
+	"severity": 8,
+	"message": "Argument of type '(c: Context<AppHonoEnv, \"/\", { in: { json: { version: string; provider: \"Client\" | \"Local\" | \"MCP\" | \"Restate\"; name: string; restate?: { service_name: string; service_type?: \"object\" | \"service\" | \"workflow\"; }; ... 5 more ...; updatedAt?: never; }; }; out: { ...; }; }>) => Promise<...>' is not assignable to parameter of type 'Handler<AppHonoEnv, \"/\", { in: { json: { version: string; provider: \"Client\" | \"Local\" | \"MCP\" | \"Restate\"; name: string; restate?: { service_name: string; service_type?: \"object\" | \"service\" | \"workflow\"; }; ... 5 more ...; updatedAt?: never; }; }; out: { ...; }; }, Promise<...>>'.\n  Type 'Promise<JSONRespondReturn<{ success: boolean; result: { slug: string; version: string; provider: \"Client\" | \"Local\" | \"MCP\" | \"Restate\"; name: string; createdAt: string; updatedAt: string; description?: string; arguments?: Record<...>; restate?: { ...; }; mcp?: { ...; } | ... 1 more ... | { ...; }; }; }, 201> | JSON...' is not assignable to type 'Promise<never>'.\n    Type 'JSONRespondReturn<{ success: boolean; result: { slug: string; version: string; provider: \"Client\" | \"Local\" | \"MCP\" | \"Restate\"; name: string; createdAt: string; updatedAt: string; description?: string; arguments?: Record<...>; restate?: { ...; }; mcp?: { ...; } | ... 1 more ... | { ...; }; }; }, 201> | JSONRespondR...' is not assignable to type 'never'.\n      Type 'JSONRespondReturn<{ success: boolean; result: { slug: string; version: string; provider: \"Client\" | \"Local\" | \"MCP\" | \"Restate\"; name: string; createdAt: string; updatedAt: string; description?: string; arguments?: Record<...>; restate?: { ...; }; mcp?: { ...; } | ... 1 more ... | { ...; }; }; }, 201>' is not assignable to type 'never'.",
+	"source": "ts",
+	"startLineNumber": 87,
+	"startColumn": 25,
+	"endLineNumber": 87,
+	"endColumn": 39,
+	"origin": "extHost1"
+}]

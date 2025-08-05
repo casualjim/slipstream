@@ -162,6 +162,8 @@ mod tests {
       provider: ToolProvider::Local,
       created_at: None,
       updated_at: None,
+      restate: None,
+      mcp: None,
     }
   }
 

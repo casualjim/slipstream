@@ -2,13 +2,14 @@
   "name": "slipstream",
   "private": true,
   "workspaces": [
-    "workers/*"
+    "workers/slipstream-ai-agents",
+    "workers/agent-registry-api"
   ],
   "devDependencies": {
-    "@types/bun": "latest",
-    "uuid": "latest"
+    "@types/bun": "^1.2.19",
+    "uuid": "^11.1.0"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.2"
   }
 }

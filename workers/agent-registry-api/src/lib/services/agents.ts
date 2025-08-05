@@ -1,5 +1,5 @@
 import { parse, rcompare } from "semver";
-import type { Agent } from "../../types";
+import type { Agent } from "../../schemas/agent";
 
 export class AgentService {
   constructor(private db: D1Database) {}
@@ -72,19 +72,11 @@ export class AgentService {
       availableTools: agent.availableTools ? JSON.stringify(agent.availableTools) : null,
     };
 
-    console.log("[AgentService.create] inserting:", {
-      slug: data.slug,
-      version: data.version,
-      organization: data.organization,
-      project: data.project,
-      model: data.model,
-      hasTools: !!data.availableTools,
-    });
-
     const res = await this.db
       .prepare(
         `INSERT INTO agents (slug, version, name, description, model, instructions, availableTools, organization, project, createdBy, updatedBy, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING *`,
       )
       .bind(
         data.slug,
@@ -101,19 +93,21 @@ export class AgentService {
         data.createdAt,
         data.updatedAt,
       )
-      .run();
+      .first<Agent>();
 
-    console.log("[AgentService.create] insert result:", res);
+    if (!res) {
+      throw new Error("Failed to create agent");
+    }
 
-    // Verify write visibility immediately
-    const check = await this.db
-      .prepare("SELECT slug, version, organization, project FROM agents WHERE slug = ? ORDER BY createdAt ASC")
-      .bind(data.slug)
-      .all();
+    // Parse availableTools back to array format to match the expected schema
+    const result = {
+      ...res,
+      availableTools: res.availableTools && typeof res.availableTools === 'string'
+        ? JSON.parse(res.availableTools)
+        : res.availableTools || undefined,
+    };
 
-    console.log("[AgentService.create] post-insert rows for slug:", data.slug, check.results);
-
-    return { success: true, result: agent };
+    return result as Agent;
   }
 
   async update(slug: string, version: string, updateData: Partial<Agent>) {
@@ -154,14 +148,6 @@ export class AgentService {
 
     const agents = (result.results || []) as Agent[];
 
-    // Debug: log all candidate versions
-    try {
-      console.log(
-        "[AgentService.getLatestBySlug] candidates:",
-        agents.map((a) => a.version),
-      );
-    } catch {}
-
     if (agents.length === 0) {
       return null;
     }
@@ -193,17 +179,6 @@ export class AgentService {
     // Prefer latest stable, otherwise latest prerelease
     const latestStable = pickLatest(stable);
     const chosen = latestStable ?? pickLatest(prerelease);
-
-    try {
-      console.log(
-        "[AgentService.getLatestBySlug] stable:",
-        stable.map((a) => a.version),
-        "prerelease:",
-        prerelease.map((a) => a.version),
-        "chosen:",
-        chosen?.version,
-      );
-    } catch {}
 
     if (!chosen) return null;
 

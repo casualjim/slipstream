@@ -204,7 +204,7 @@ describe("Tool API Integration Tests", () => {
       const toolData = {
         name: "Weather API @ Home",
         version: "1.0.0",
-        provider: "MCP",
+        provider: "Local", // use Local to avoid MCP config requirement interfering with slug test
         description: "Weather tool with special chars",
       };
 
@@ -489,7 +489,7 @@ describe("Tool API Integration Tests", () => {
         name: "Get Test Tool",
         slug: "get-test-tool",
         version: "2.0.0",
-        provider: "MCP",
+        provider: "Local",
       };
 
       await SELF.fetch(`http://local.test/api/v1/tools`, {
@@ -654,7 +654,8 @@ describe("Tool API Integration Tests", () => {
     });
 
     it("should return 404 if tool to delete is not found", async () => {
-      const response = await SELF.fetch(`http://local.test/api/v1/tools/Local/non-existent-tool/1.0.0`, {
+      // Choose a slug/version combination that is guaranteed not created above
+      const response = await SELF.fetch(`http://local.test/api/v1/tools/Local/definitely-missing-tool/9.9.9`, {
         method: "DELETE",
         headers: {
           Authorization: "Bearer test-api-key",
@@ -859,14 +860,15 @@ describe("Tool API Integration Tests", () => {
     });
   });
 
-  // Tests for GET /api/v1/tools/{slug}/latest
-  describe("GET /api/v1/tools/{slug}/latest", () => {
+  // Tests for GET /api/v1/tools/{provider}/{slug}
+  describe("GET /api/v1/tools/{provider}/{slug}", () => {
     it("should get the latest version of a tool", async () => {
       // Create multiple versions of the same tool
       const toolVersions = [
         { name: "Latest Test Tool", slug: "latest-test-tool", version: "1.0.0", provider: "Local" },
         { name: "Latest Test Tool", slug: "latest-test-tool", version: "1.1.0", provider: "Local" },
-        { name: "Latest Test Tool", slug: "latest-test-tool", version: "2.0.0", provider: "MCP" },
+        // For MCP, include minimal config so it passes validation
+        { name: "Latest Test Tool", slug: "latest-test-tool", version: "2.0.0", provider: "MCP", mcp: { type: "stdio", command: "echo" } },
       ];
 
       for (const toolData of toolVersions) {
@@ -880,18 +882,36 @@ describe("Tool API Integration Tests", () => {
         });
       }
 
-      const response = await SELF.fetch(`http://local.test/api/v1/tools/MCP/latest-test-tool`, {
+      // Verify latest for Local (provider-scoped)
+      const resLocal = await SELF.fetch(`http://local.test/api/v1/tools/Local/latest-test-tool`, {
         headers: {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json<{ success: boolean; result: any }>();
+      const bodyLocal = await resLocal.json<{ success: boolean; result: any }>();
 
-      expect(response.status).toBe(200);
-      expect(body.success).toBe(true);
-      expect(body.result).toMatchObject({
+      expect(resLocal.status).toBe(200);
+      expect(bodyLocal.success).toBe(true);
+      expect(bodyLocal.result).toMatchObject({
         slug: "latest-test-tool",
-        version: "2.0.0", // Should return the highest version
+        version: "1.1.0", // Highest stable for Local provider
+        name: "Latest Test Tool",
+        provider: "Local",
+      });
+
+      // Verify latest for MCP (provider-scoped)
+      const resMcp = await SELF.fetch(`http://local.test/api/v1/tools/MCP/latest-test-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const bodyMcp = await resMcp.json<{ success: boolean; result: any }>();
+
+      expect(resMcp.status).toBe(200);
+      expect(bodyMcp.success).toBe(true);
+      expect(bodyMcp.result).toMatchObject({
+        slug: "latest-test-tool",
+        version: "2.0.0", // Highest for MCP provider
         name: "Latest Test Tool",
         provider: "MCP",
       });
@@ -993,11 +1013,12 @@ describe("Tool API Integration Tests", () => {
       expect(["1.0.0", "1.0.0+build.1", "1.0.0+build.2"]).toContain(body.result.version);
     });
 
-    it("should handle multiple providers with same slug", async () => {
+    it("should handle multiple providers with same slug (provider-scoped latest)", async () => {
       // Create tools with same slug but different providers
       const toolVersions = [
         { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "1.0.0", provider: "Local" },
-        { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "2.0.0", provider: "MCP" },
+        // include minimal MCP config so validation passes
+        { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "2.0.0", provider: "MCP", mcp: { type: "stdio", command: "echo" } },
         { name: "Multi Provider Tool", slug: "multi-provider-tool", version: "1.5.0", provider: "Client" },
       ];
 
@@ -1012,18 +1033,44 @@ describe("Tool API Integration Tests", () => {
         });
       }
 
-      const response = await SELF.fetch(`http://local.test/api/v1/tools/MCP/multi-provider-tool`, {
+      // Latest for MCP should be 2.0.0 within MCP provider
+      const resMcp = await SELF.fetch(`http://local.test/api/v1/tools/MCP/multi-provider-tool`, {
         headers: {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json<{ success: boolean; result: any }>();
+      const bodyMcp = await resMcp.json<{ success: boolean; result: any }>();
 
-      expect(response.status).toBe(200);
-      expect(body.success).toBe(true);
-      // Should return the highest version across all providers
-      expect(body.result.version).toBe("2.0.0");
-      expect(body.result.provider).toBe("MCP");
+      expect(resMcp.status).toBe(200);
+      expect(bodyMcp.success).toBe(true);
+      expect(bodyMcp.result.version).toBe("2.0.0");
+      expect(bodyMcp.result.provider).toBe("MCP");
+
+      // Latest for Local should be 1.0.0 within Local provider
+      const resLocal = await SELF.fetch(`http://local.test/api/v1/tools/Local/multi-provider-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const bodyLocal = await resLocal.json<{ success: boolean; result: any }>();
+
+      expect(resLocal.status).toBe(200);
+      expect(bodyLocal.success).toBe(true);
+      expect(bodyLocal.result.version).toBe("1.0.0");
+      expect(bodyLocal.result.provider).toBe("Local");
+
+      // Latest for Client should be 1.5.0 within Client provider
+      const resClient = await SELF.fetch(`http://local.test/api/v1/tools/Client/multi-provider-tool`, {
+        headers: {
+          Authorization: "Bearer test-api-key",
+        },
+      });
+      const bodyClient = await resClient.json<{ success: boolean; result: any }>();
+
+      expect(resClient.status).toBe(200);
+      expect(bodyClient.success).toBe(true);
+      expect(bodyClient.result.version).toBe("1.5.0");
+      expect(bodyClient.result.provider).toBe("Client");
     });
   });
 });

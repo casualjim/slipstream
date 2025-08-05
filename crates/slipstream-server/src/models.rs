@@ -114,13 +114,13 @@ pub struct Message {
   pub source_description: Option<String>,
 }
 
-/// Request to add messages to a group.
+/// The request to add messages to a group.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AddMessages {
-  /// The messages to add.
-  pub messages: Vec<Message>,
   /// The group id to add messages to.
   pub group_id: String,
+  /// The messages to add.
+  pub messages: Vec<Message>,
 }
 
 /// Request to add a concept to a group.

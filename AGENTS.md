@@ -2,6 +2,15 @@
 
 This document standardizes local tooling, build/test workflows, and coding style for Slipstream (Rust crates + Cloudflare Workers).
 
+EXTREMELY IMPORTANT
+
+DO NOT EVER SWALLOW ERRORS, FAIL SPECTACULARLY.
+DO NOT EVER SWALLOW ERRORS, FAIL SPECTACULARLY.
+DO NOT EVER SWALLOW ERRORS, FAIL SPECTACULARLY.
+
+ALWAYS USE PROPERLY TYPED CODE
+
+
 ## Prerequisites
 - Toolchain manager: mise (repo provides tasks)
 - Rust toolchain: stable with nextest

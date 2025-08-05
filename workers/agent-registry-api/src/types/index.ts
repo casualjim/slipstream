@@ -138,7 +138,37 @@ export const UserSchema = z.object({
 /**
  * Tool entity schema
  */
-export const ToolSchema = z.object({
+const RestateTypeSchema = z.enum(["service", "object", "workflow"]).default("service");
+
+const RestateConfigSchema = z.object({
+  service_name: z.string().trim().min(1, { message: "restate.service_name must not be empty" }),
+  service_type: RestateTypeSchema,
+});
+
+const McpConfigStdioSchema = z.object({
+  type: z.literal("stdio"),
+  command: z.string().trim().min(1),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string()).default({}),
+});
+const McpConfigSseSchema = z.object({
+  type: z.literal("sse"),
+  url: z.string().trim().min(1),
+  headers: z.record(z.string()).optional(),
+});
+const McpConfigHttpSchema = z.object({
+  type: z.literal("http"),
+  url: z.string().trim().min(1),
+  headers: z.record(z.string()).optional(),
+});
+const McpConfigSchema = z.discriminatedUnion("type", [
+  McpConfigStdioSchema,
+  McpConfigSseSchema,
+  McpConfigHttpSchema,
+]);
+
+// Base Tool object (no effects)
+export const ToolBaseSchema = z.object({
   slug: z
     .string()
     .trim()
@@ -151,30 +181,101 @@ export const ToolSchema = z.object({
   name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).describe("The display name of the tool."),
   description: z.string().nullish().describe("A brief description of what the tool does."),
   arguments: z.record(z.unknown()).nullish().describe("The JSON schema for the tool's arguments."), // JSON Schema object
+
+  // New provider-specific configs
+  restate: RestateConfigSchema.optional().describe("Restate configuration; required when provider is Restate"),
+  mcp: McpConfigSchema.optional().describe("MCP configuration; required when provider is MCP"),
+
   createdAt: isoDate.describe("The date and time when the tool was created, in ISO 8601 format."),
   updatedAt: isoDate.describe("The date and time when the tool was last updated, in ISO 8601 format."),
+});
+
+export const ToolSchema = ToolBaseSchema.superRefine((val, ctx) => {
+  // Require/forbid restate based on provider
+  if (val.provider === ToolProvider.Restate) {
+    if (!val.restate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["restate"],
+        message: "restate configuration is required when provider is 'Restate'",
+      });
+    } else if (!val.restate.service_name?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["restate", "service_name"],
+        message: "restate.service_name must not be empty when provider is 'Restate'",
+      });
+    }
+    if (val.mcp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mcp"],
+        message: "mcp configuration must not be provided unless provider is 'MCP'",
+      });
+    }
+  } else if (val.provider === ToolProvider.MCP) {
+    if (!val.mcp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mcp"],
+        message: "mcp configuration is required when provider is 'MCP'",
+      });
+    }
+    if (val.restate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["restate"],
+        message: "restate configuration must not be provided unless provider is 'Restate'",
+      });
+    }
+  } else {
+    if (val.restate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["restate"],
+        message: "restate configuration must not be provided unless provider is 'Restate'",
+      });
+    }
+    if (val.mcp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mcp"],
+        message: "mcp configuration must not be provided unless provider is 'MCP'",
+      });
+    }
+  }
 });
 
 /**
  * Schema for creating tools - slug is optional and will be auto-generated
  */
-export const CreateToolSchema = z.object({
-  slug: z.string().trim().regex(SLUG_REGEX, SLUG_ERROR).optional(),
-  version: semverSchema,
-  provider: z.nativeEnum(ToolProvider),
-  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR),
-  description: z.string().optional(),
-  arguments: z.record(z.unknown()).optional(), // JSON Schema object
+export const CreateToolSchema = ToolBaseSchema.pick({
+  slug: true,
+  version: true,
+  provider: true,
+  name: true,
+  description: true,
+  arguments: true,
+  restate: true,
+  mcp: true,
+}).extend({
+  slug: ToolBaseSchema.shape.slug.optional(),
 });
 
 /**
  * Schema for updating tools - excludes primary keys
  */
-export const UpdateToolSchema = z.object({
-  name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).optional(),
-  description: z.string().optional(),
-  arguments: z.record(z.unknown()).optional(), // JSON Schema object
-});
+export const UpdateToolSchema = z
+  .object({
+    name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).optional(),
+    description: z.string().optional(),
+    arguments: z.record(z.unknown()).optional(), // JSON Schema object
+    restate: ToolBaseSchema.shape.restate.optional(),
+    mcp: ToolBaseSchema.shape.mcp.optional(),
+  })
+  .superRefine((_val, _ctx) => {
+    // Partial updates: consistency checks can be added if provider is mutable; it is not in our endpoints.
+  });
 
 /**
  * Model provider entity schema
@@ -252,10 +353,7 @@ export type Agent = z.infer<typeof AgentSchema>;
 // Use the generated Env interface directly
 // Extend Env to include our Durable Object namespace for EventHub
 // Extend Env to include our Durable Object namespace for EventHub
-export interface AppEnv extends Env {
-  // Durable Object binding for event streaming
-  EVENT_HUB: any;
-}
+export interface AppEnv extends Env{}
 
 // Define our auth context type
 export type AuthContext = {

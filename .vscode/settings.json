@@ -16,5 +16,8 @@
       "source.organizeImports": "always",
       "source.fixAll.biome": "always"
     }
+  },
+  "files.associations": {
+    "wrangler.json": "jsonc"
   }
 }

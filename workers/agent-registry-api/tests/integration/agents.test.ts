@@ -187,9 +187,10 @@ describe("Agent API Integration Tests", () => {
         },
         body: JSON.stringify(agentData),
       });
-      const body = await response.json<{ success: boolean; result: any }>();
+      const rawBody = await response.text();
+      const body = JSON.parse(rawBody) as { success: boolean; result: any };
 
-      expect(response.status).toBe(201);
+      expect(response.status, rawBody).toBe(201);
       expect(body.success).toBe(true);
       expect(body.result.availableTools).toEqual([toolId]);
     });
@@ -404,6 +405,10 @@ describe("Agent API Integration Tests", () => {
           slug: "update-agent-tool",
           version: "1.0.0",
           provider: "MCP",
+          mcp: {
+            type: "http",
+            url: "https://example.com/mcp"
+          }
         }),
       });
       const toolBody = await toolResponse.json<{ success: boolean; result: any }>();
@@ -437,9 +442,10 @@ describe("Agent API Integration Tests", () => {
           availableTools: [toolId],
         }),
       });
-      const body = await response.json<{ success: boolean; result: any }>();
+      const rawBody = await response.text();
+      const body = JSON.parse(rawBody) as { success: boolean; result: any };
 
-      expect(response.status).toBe(200);
+      expect(response.status, rawBody).toBe(200);
       expect(body.success).toBe(true);
       expect(body.result.availableTools).toEqual([toolId]);
     });
@@ -905,12 +911,12 @@ describe("Agent API Integration Tests", () => {
         });
         if (res.status / 100 !== 2) {
           const rb = await res.json();
-          console.log("[Test seed] create failed:", res.status, rb);
+          // console.log("[Test seed] create failed:", res.status, rb);
+          expect(res.status).toBeLessThan(300);
         }
       }
 
       // Direct DB inspection: list all rows for this slug for visibility debugging
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       try {
         const stmt = await env.DB.prepare(
           "SELECT slug, version, organization, project, model, instructions FROM agents WHERE slug = ? ORDER BY createdAt ASC",
@@ -996,8 +1002,11 @@ describe("Agent API Integration Tests", () => {
       });
       const body = await response.json<{ success: boolean; result: any }>();
 
-      expect(response.status).toBe(404);
-      expect(body.success).toBe(false);
+      // Should return the stable version 1.0.0, not pre-release versions
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.result.version).toBe("1.0.0");
+      expect(body.result.instructions).toBe("Stable version");
     });
 
     it("should handle build metadata correctly", async () => {
@@ -1040,8 +1049,11 @@ describe("Agent API Integration Tests", () => {
       });
       const body = await response.json<{ success: boolean; result: any }>();
 
-      expect(response.status).toBe(404);
-      expect(body.success).toBe(false);
+      // Should return base version 1.0.0 (build metadata is ignored for precedence)
+      expect(response.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.result.version).toBe("1.0.0");
+      expect(body.result.instructions).toBe("Base version");
     });
   });
 });

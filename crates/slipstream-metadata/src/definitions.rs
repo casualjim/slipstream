@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize};
+use std::hash::Hash;
 use typed_builder::TypedBuilder;
 use validator::Validate;
 
@@ -259,10 +260,15 @@ impl TryFrom<String> for ToolRef {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolProvider {
+  /// A Client tool that runs in the user's environment or is the user (human interaction)
   Client,
+  /// A Local tool that runs on the local machine, typically for system tasks
   Local,
+  /// An MCP tool that either runs locally or via SSE/MCP
   MCP,
+  /// A Tool that's surfaced via Restate
   Restate,
+  /// This is really an error
   #[serde(other, skip_serializing)]
   Unknown,
 }
@@ -317,13 +323,48 @@ impl std::fmt::Display for ToolProvider {
   }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TypedBuilder, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RestateType {
+  #[default]
+  Service,
+  Object,
+  Workflow,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, TypedBuilder, Validate)]
+pub struct RestateConfig {
+  pub service_name: String,
+  pub service_type: RestateType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum McpConfig {
+  Stdio {
+    command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    args: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    env: std::collections::HashMap<String, String>,
+  },
+  Sse {
+    url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    headers: Option<std::collections::HashMap<String, String>>,
+  },
+  Http {
+    url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    headers: Option<std::collections::HashMap<String, String>>,
+  },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TypedBuilder)]
 pub struct ToolDefinition {
   #[builder(setter(into))]
-  #[validate(length(min = 1, message = "Tool slug cannot be empty"))]
   pub slug: String,
   #[builder(setter(into))]
-  #[validate(length(min = 1, message = "Tool name cannot be empty"))]
   pub name: String,
   #[builder(default, setter(strip_option, into))]
   pub description: Option<String>,
@@ -338,6 +379,16 @@ pub struct ToolDefinition {
   #[serde(skip_serializing_if = "Option::is_none", alias = "updatedAt")]
   #[builder(default, setter(strip_option, into))]
   pub updated_at: Option<String>,
+  #[builder(default, setter(strip_option))]
+  pub restate: Option<RestateConfig>,
+  #[builder(default, setter(strip_option))]
+  pub mcp: Option<McpConfig>,
+}
+
+impl ToolDefinition {
+  pub fn formatted_name(&self) -> String {
+    self.slug.replace('/', "__").to_lowercase()
+  }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -681,7 +732,79 @@ impl ToolRef {
 
 impl AgentDefinition {}
 
-impl ToolDefinition {}
+impl validator::Validate for ToolDefinition {
+  fn validate(&self) -> Result<(), validator::ValidationErrors> {
+    let mut errors = validator::ValidationErrors::new();
+
+    // Field-level validations (since we removed #[derive(Validate)] on ToolDefinition)
+    if self.slug.trim().is_empty() {
+      let mut error = validator::ValidationError::new("length");
+      error.message = Some("Tool slug cannot be empty".into());
+      errors.add("slug", error);
+    }
+    if self.name.trim().is_empty() {
+      let mut error = validator::ValidationError::new("length");
+      error.message = Some("Tool name cannot be empty".into());
+      errors.add("name", error);
+    }
+
+    // Cross-field constraints for restate config
+    match self.provider {
+      ToolProvider::Restate => match &self.restate {
+        Some(cfg) => {
+          if cfg.service_name.trim().is_empty() {
+            let mut error = validator::ValidationError::new("required");
+            error.message =
+              Some("restate.service_name must not be empty when provider is 'Restate'".into());
+            errors.add("restate.service_name", error);
+          }
+        }
+        None => {
+          let mut error = validator::ValidationError::new("required");
+          error.message =
+            Some("restate configuration is required when provider is 'Restate'".into());
+          errors.add("restate", error);
+        }
+      },
+      _ => {
+        if self.restate.is_some() {
+          let mut error = validator::ValidationError::new("forbidden");
+          error.message =
+            Some("restate configuration must not be provided unless provider is 'Restate'".into());
+          errors.add("restate", error);
+        }
+      }
+    }
+
+    // Cross-field constraints for MCP config
+    match self.provider {
+      ToolProvider::MCP => match &self.mcp {
+        Some(_cfg) => {
+          // Optional: add inner MCP validation here (non-empty command/url) in future
+        }
+        None => {
+          let mut error = validator::ValidationError::new("required");
+          error.message = Some("mcp configuration is required when provider is 'MCP'".into());
+          errors.add("mcp", error);
+        }
+      },
+      _ => {
+        if self.mcp.is_some() {
+          let mut error = validator::ValidationError::new("forbidden");
+          error.message =
+            Some("mcp configuration must not be provided unless provider is 'MCP'".into());
+          errors.add("mcp", error);
+        }
+      }
+    }
+
+    if errors.is_empty() {
+      Ok(())
+    } else {
+      Err(errors)
+    }
+  }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1045,13 +1168,13 @@ mod tests {
 
   #[test]
   fn test_tool_definition_validation() {
+    // Valid non-restate/non-mcp tool: restate and mcp must be None
     let valid_tool = ToolDefinition::builder()
       .slug("test-tool")
       .name("Test Tool")
       .version(Version::parse("1.0.0").unwrap())
       .provider(ToolProvider::Local)
       .build();
-
     assert!(Validate::validate(&valid_tool).is_ok());
 
     // Empty slug should fail validation
@@ -1063,9 +1186,7 @@ mod tests {
       .build();
     assert!(Validate::validate(&invalid_tool).is_err());
 
-    // Version emptiness no longer applicable: Version is strongly typed.
-    // Keep a negative case on invalid provider/slug combo if needed in the future.
-    // For now, ensure another invalid case is covered: empty name should fail.
+    // Empty name should fail validation
     let invalid_tool2 = ToolDefinition::builder()
       .slug("test-tool")
       .name("")
@@ -1073,6 +1194,90 @@ mod tests {
       .provider(ToolProvider::Local)
       .build();
     assert!(Validate::validate(&invalid_tool2).is_err());
+
+    // Provider = Restate requires restate config
+    let restate_missing = ToolDefinition::builder()
+      .slug("restate-tool")
+      .name("Restate Tool")
+      .version(Version::parse("1.2.3").unwrap())
+      .provider(ToolProvider::Restate)
+      .build();
+    assert!(Validate::validate(&restate_missing).is_err());
+
+    // Provider = Restate with empty service_name is invalid
+    let restate_empty_name = ToolDefinition::builder()
+      .slug("restate-tool")
+      .name("Restate Tool")
+      .version(Version::parse("1.2.3").unwrap())
+      .provider(ToolProvider::Restate)
+      .restate(RestateConfig {
+        service_name: "".into(),
+        service_type: RestateType::Service,
+      })
+      .build();
+    assert!(Validate::validate(&restate_empty_name).is_err());
+
+    // Provider = Restate with valid restate config is OK
+    let restate_ok = ToolDefinition::builder()
+      .slug("restate-tool")
+      .name("Restate Tool")
+      .version(Version::parse("1.2.3").unwrap())
+      .provider(ToolProvider::Restate)
+      .restate(RestateConfig {
+        service_name: "my-service".into(),
+        service_type: RestateType::Workflow,
+      })
+      .build();
+    assert!(Validate::validate(&restate_ok).is_ok());
+
+    // Non-Restate provider with restate config should be invalid
+    let non_restate_with_restate = ToolDefinition::builder()
+      .slug("local-tool")
+      .name("Local Tool")
+      .version(Version::parse("0.1.0").unwrap())
+      .provider(ToolProvider::Local)
+      .restate(RestateConfig {
+        service_name: "should-not-be-here".into(),
+        service_type: RestateType::Object,
+      })
+      .build();
+    assert!(Validate::validate(&non_restate_with_restate).is_err());
+
+    // Provider = MCP requires mcp config
+    let mcp_missing = ToolDefinition::builder()
+      .slug("mcp-tool")
+      .name("MCP Tool")
+      .version(Version::parse("1.0.0").unwrap())
+      .provider(ToolProvider::MCP)
+      .build();
+    assert!(Validate::validate(&mcp_missing).is_err());
+
+    // Non-MCP provider with mcp config should be invalid
+    let non_mcp_with_mcp = ToolDefinition::builder()
+      .slug("local-tool")
+      .name("Local Tool")
+      .version(Version::parse("0.1.0").unwrap())
+      .provider(ToolProvider::Local)
+      .mcp(McpConfig::Http {
+        url: "https://example.com".into(),
+        headers: None,
+      })
+      .build();
+    assert!(Validate::validate(&non_mcp_with_mcp).is_err());
+
+    // Provider = MCP with valid mcp stdio config is OK
+    let mcp_ok = ToolDefinition::builder()
+      .slug("mcp-tool")
+      .name("MCP Tool")
+      .version(Version::parse("1.0.0").unwrap())
+      .provider(ToolProvider::MCP)
+      .mcp(McpConfig::Stdio {
+        command: "my-mcp".into(),
+        args: Some(vec!["--flag".into()]),
+        env: std::collections::HashMap::new(),
+      })
+      .build();
+    assert!(Validate::validate(&mcp_ok).is_ok());
   }
 
   #[test]

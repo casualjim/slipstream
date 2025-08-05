@@ -20,7 +20,7 @@ describe("Organization API Integration Tests", () => {
           description: "A test organization",
         }),
       });
-      const body = await response.json();
+      const body = await response.json<{success: boolean, errors: Array<{message: string}>}>();
 
       expect(response.status).toBe(401);
       expect(body.success).toBe(false);
@@ -83,7 +83,7 @@ describe("Organization API Integration Tests", () => {
       });
       const body = await response.json();
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(409);
       expect(body.success).toBe(false);
       expect(body.errors[0].message).toBe("Slug already exists");
     });
@@ -382,7 +382,7 @@ describe("Organization API Integration Tests", () => {
           Authorization: "Bearer test-api-key",
         },
       });
-      const body = await response.json();
+      const body = (await response.json()) as ApiError;
 
       expect(response.status).toBe(400);
       expect(body.success).toBe(false);

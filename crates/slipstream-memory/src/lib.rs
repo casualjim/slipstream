@@ -1,5 +1,6 @@
 mod edges;
 mod engine;
+mod error;
 mod migrations;
 mod mutations;
 mod nodes;
