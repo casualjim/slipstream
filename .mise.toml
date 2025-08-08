@@ -10,9 +10,6 @@ mkcert = "latest"
 "aqua:protocolbuffers/protobuf/protoc" = "latest"
 bun = "latest"
 "cargo:cargo-sort" = "latest"
-node = "latest"
-"npm:wrangler" = "latest"
-"cargo:worker-build" = "latest"
 "ubi:j178/prefligit" = "latest"
 
 [env]

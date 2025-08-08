@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Restore mise cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/mise
+            ~/.cache/mise
+          key: ${{ runner.os }}-mise-${{ hashFiles('.mise.*', '**/bun.lock', '**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mise-
+
+      - name: Install toolchain
+        run: mise install
+
+      - name: Test
+        run: mise test
+
