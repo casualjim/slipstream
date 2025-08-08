@@ -9,7 +9,8 @@ echo "🧪 Starting Slipstream tests (release mode)..."
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
-cargo nextest run --release --workspace --no-fail-fast --no-capture
+# cargo nextest run --release --workspace --no-fail-fast --no-capture
+mise test:rust
 mise test:workers
 
 echo "✅ Slipstream tests complete!"
