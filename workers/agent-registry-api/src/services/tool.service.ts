@@ -38,8 +38,8 @@ function serializeRow(row: ToolDbRow) {
   }
 
   // D1 returns NULL for absent columns -> treat as undefined for optional objects.
-  const rawRestate = (row as any).restate;
-  const rawMcp = (row as any).mcp;
+  const rawRestate = row.restate;
+  const rawMcp = row.mcp;
 
   const parseOptionalJson = (val: unknown, field: "restate" | "mcp"): unknown => {
     if (val == null) return undefined;
@@ -94,9 +94,9 @@ export class ToolService {
     const argsJson = typeof input.arguments !== "undefined" ? JSON.stringify(input.arguments ?? null) : null;
     // Persist provider-specific configs when present as JSON TEXT columns
     const mcpJson =
-      typeof (input as any).mcp !== "undefined" ? JSON.stringify((input as any).mcp ?? null) : null;
+      typeof input.mcp !== "undefined" ? JSON.stringify(input.mcp ?? null) : null;
     const restateJson =
-      typeof (input as any).restate !== "undefined" ? JSON.stringify((input as any).restate ?? null) : null;
+      typeof input.restate !== "undefined" ? JSON.stringify(input.restate ?? null) : null;
 
     // Insert (respecting composite PK)
     await this.db
@@ -206,7 +206,7 @@ export class ToolService {
       .bind(provider, slug, version)
       .run();
     // Prefer definitive change count if available; fall back to existence check
-    const changes = (res as any)?.meta?.changes ?? (res as any)?.changes;
+    const changes = res.meta?.changes;
     if (typeof changes === "number") {
       return changes > 0;
     }
@@ -268,7 +268,7 @@ export class ToolService {
       ${clauses}
     `;
     const countRow = await this.db.prepare(countSql).bind(...bind).first<{ total: number }>();
-    const total_count = (countRow?.total as number) ?? 0;
+    const total_count = countRow?.total ?? 0;
 
     const sql = `
       SELECT slug, version, provider, name, description, arguments, createdAt, updatedAt, mcp, restate
@@ -280,7 +280,7 @@ export class ToolService {
 
     const res = await this.db.prepare(sql).bind(...bind).all<ToolDbRow>();
     // Do not swallow individual item errors; this will throw if any row is invalid.
-    const items = (res.results ?? []).map((r) => serializeRow(r));
+    const items = res.results.map((r) => serializeRow(r));
 
     return {
       items,

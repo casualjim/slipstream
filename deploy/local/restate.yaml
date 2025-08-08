@@ -1,0 +1,11 @@
+services:
+  restate:
+    image: restatedev/restate
+    environment:
+      RESTATE_INGRESS__BIND_ADDRESS: "0.0.0.0:8424"
+    ports:
+      - "8424:8080"
+      - "9070:9070"
+      - "9071:9071"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -116,14 +116,23 @@ export function createProjectsRouter() {
         201,
       );
     } catch (err) {
-      if (err && typeof err === "object" && "issues" in (err as any)) {
+      if (err && typeof err === "object" && "issues" in err) {
         const first = (err as any).issues?.[0];
         return c.json(failure(first?.message ?? "Invalid input", undefined, first?.path?.join?.(".")), 400);
       }
-      if (typeof err?.message === "string" && err.message.includes("UNIQUE")) {
+      if (
+        err &&
+        typeof err === "object" &&
+        "message" in err &&
+        typeof err.message === "string" &&
+        err.message.includes("UNIQUE")
+      ) {
         return c.json(failure("Conflict: project already exists"), 409);
       }
-      return c.json(failure(err?.message ?? "Unable to create project"), 500);
+      if (err && typeof err === "object" && "message" in err && typeof err.message === "string") {
+        return c.json(failure(err.message, undefined, "error"), 500);
+      }
+      return c.json(failure("Unable to create project"), 500);
     }
   });
 
@@ -307,7 +316,10 @@ export function createProjectsRouter() {
         const first = (err as any).issues?.[0];
         return c.json(failure(first?.message ?? "Invalid input", undefined, first?.path?.join?.(".")), 400);
       }
-      return c.json(failure(err?.message ?? "Unable to update project"), 500);
+      if (err && typeof err === "object" && "message" in err && typeof err.message === "string") {
+        return c.json(failure(err.message, undefined, "error"), 500);
+      }
+      return c.json(failure("Unable to update project"), 500);
     }
   });
 

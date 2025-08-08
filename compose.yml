@@ -1,11 +1,7 @@
-services:
-  restate:
-    image: restatedev/restate
-    ports:
-      - "8424:8080"
-      - "9070:9070"
-      - "9071:9071"
+include:
+  # - deploy/local/timescale.yaml
+  # - deploy/local/valkey.yaml
+  - deploy/local/nats.yaml
+  - deploy/local/restate.yaml
+  - deploy/local/wasmcloud.yaml
 
-
-volumes:
-  qdrant_storage:

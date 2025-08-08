@@ -10,13 +10,6 @@
   "observability": {
     "enabled": true
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "agent-registry-api",
-      "database_id": "9c3491e8-6128-4e8a-9ed7-a17f96aa67f1"
-    }
-  ],
   "vars": {},
   // Durable Object bindings for event streaming
   "env": {
@@ -27,7 +20,18 @@
           "database_name": "agent-registry-api-preview",
           "database_id": "3996e168-1d7b-4992-8ea4-19b962a37372"
         }
-      ]
+      ],
+      "vars": {}
+    },
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "agent-registry-api",
+          "database_id": "9c3491e8-6128-4e8a-9ed7-a17f96aa67f1"
+        }
+      ],
+      "vars": {}
     }
   }
 }

@@ -1,0 +1,238 @@
+<common_patterns>
+  <overview>
+    Reusable patterns for crafting small, composable, and storage-agnostic designs across Rust, Go, and TypeScript. Prefer ports (interfaces/traits) with narrow, explicit contracts and adapters for infra choices like Postgres, LanceDB, and KuzuDB.
+  </overview>
+
+  <pattern name="rust_port_adapter_repository">
+    <description>Define a domain-facing repository trait (port) with storage-specific adapters.</description>
+    <code language="rust"><![CDATA[
+pub mod domain {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub struct InteractionId(String);
+
+    impl InteractionId {
+        pub fn new(id: String) -> eyre::Result<Self> {
+            eyre::ensure!(!id.trim().is_empty(), "empty id");
+            Ok(Self(id))
+        }
+        pub fn as_str(&self) -> &str { &self.0 }
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct Interaction {
+        pub id: InteractionId,
+        pub content: String,
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum RepoError {
+        #[error("not found")]
+        NotFound,
+        #[error("conflict")]
+        Conflict,
+        #[error("storage: {0}")]
+        Storage(String),
+        #[error("unknown: {0}")]
+        Unknown(String),
+    }
+
+    #[async_trait::async_trait]
+    pub trait InteractionRepo {
+        async fn get(&self, id: &InteractionId) -> Result<Interaction, RepoError>;
+        async fn upsert(&self, item: &Interaction) -> Result<(), RepoError>;
+        async fn delete(&self, id: &InteractionId) -> Result<(), RepoError>;
+    }
+}
+
+pub mod adapters {
+    use super::domain::*;
+    use async_trait::async_trait;
+
+    pub struct PostgresInteractionRepo {
+        // pool: sqlx::PgPool,
+    }
+    impl PostgresInteractionRepo {
+        pub fn new(/*pool: sqlx::PgPool*/) -> Self { Self { /*pool*/ } }
+    }
+
+    #[async_trait]
+    impl InteractionRepo for PostgresInteractionRepo {
+        async fn get(&self, id: &InteractionId) -> Result<Interaction, RepoError> {
+            // Translate storage errors -> RepoError precisely
+            Err(RepoError::NotFound)
+        }
+        async fn upsert(&self, _item: &Interaction) -> Result<(), RepoError> {
+            Ok(())
+        }
+        async fn delete(&self, _id: &InteractionId) -> Result<(), RepoError> {
+            Ok(())
+        }
+    }
+
+    pub struct LanceInteractionRepo { /* lance handle */ }
+    #[async_trait]
+    impl InteractionRepo for LanceInteractionRepo {
+        async fn get(&self, _id: &InteractionId) -> Result<Interaction, RepoError> {
+            Err(RepoError::NotFound)
+        }
+        async fn upsert(&self, _item: &Interaction) -> Result<(), RepoError> { Ok( ) }
+        async fn delete(&self, _id: &InteractionId) -> Result<(), RepoError> { Ok( ) }
+    }
+
+    pub struct KuzuInteractionRepo { /* kuzu handle */ }
+    #[async_trait]
+    impl InteractionRepo for KuzuInteractionRepo {
+        async fn get(&self, _id: &InteractionId) -> Result<Interaction, RepoError> {
+            Err(RepoError::NotFound)
+        }
+        async fn upsert(&self, _item: &Interaction) -> Result<(), RepoError> { Ok( ) }
+        async fn delete(&self, _id: &InteractionId) -> Result<(), RepoError> { Ok( ) }
+    }
+}
+
+pub mod app {
+    use super::domain::*;
+    pub struct Service<R: InteractionRepo> {
+        repo: R,
+    }
+    impl<R: InteractionRepo> Service<R> {
+        pub fn new(repo: R) -> Self { Self { repo } }
+        pub async fn save(&self, v: Interaction) -> Result<(), RepoError> {
+            // enforce invariants at the boundary
+            eyre::ensure!(!v.content.trim().is_empty(), "empty content")
+                .map_err(|e| RepoError::Unknown(e.to_string()))?;
+            self.repo.upsert(&v).await
+        }
+    }
+}
+]]></code>
+    <notes>Domain owns the contract and invariants; adapters translate storage concerns. Keep error mapping explicit.</notes>
+  </pattern>
+
+  <pattern name="rust_iterator_pipeline">
+    <description>Transform collections with composable iterators, keeping functions pure.</description>
+    <code language="rust"><![CDATA[
+fn normalize_inputs(xs: &[String]) -> Vec<String> {
+    xs.iter()
+      .map(|s| s.trim())
+      .filter(|s| !s.is_empty())
+      .map(|s| s.to_lowercase())
+      .collect()
+}
+]]></code>
+  </pattern>
+
+  <pattern name="golang_consumer_defined_interface">
+    <description>Define small interfaces in the consumer package; inject concrete adapters.</description>
+    <code language="go"><![CDATA[
+package service
+
+import "context"
+
+type Interaction struct {
+  ID      string
+  Content string
+}
+
+type Repo interface {
+  Get(ctx context.Context, id string) (Interaction, error)
+  Upsert(ctx context.Context, it Interaction) error
+  Delete(ctx context.Context, id string) error
+}
+
+type Service struct {
+  repo Repo
+}
+
+func New(repo Repo) *Service { return &Service{repo: repo} }
+
+func (s *Service) Save(ctx context.Context, it Interaction) error {
+  if len(it.Content) == 0 {
+    return fmt.Errorf("invalid: empty content")
+  }
+  return s.repo.Upsert(ctx, it)
+}
+]]></code>
+    <notes>Keep interface in the consuming package to avoid over-generalization.</notes>
+  </pattern>
+
+  <pattern name="ts_boundary_codec_and_pure_core">
+    <description>Validate external inputs at the boundary and transform into strict domain types.</description>
+    <code language="typescript"><![CDATA[
+type Interaction = { id: string; content: string };
+
+function isInteraction(x: unknown): x is Interaction {
+  const obj = x as Record<string, unknown>;
+  return !!obj && typeof obj.id === "string" && typeof obj.content === "string";
+}
+
+export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+export function parseInteraction(x: unknown): Result<Interaction, string> {
+  if (isInteraction(x) && x.content.trim().length > 0) {
+    return { ok: true, value: { id: x.id, content: x.content } };
+  }
+  return { ok: false, error: "Invalid interaction" };
+}
+
+export function saveCore(repo: { upsert: (i: Interaction) => Promise<void> }) {
+  return async (raw: unknown): Promise<Result<void, string>> => {
+    const parsed = parseInteraction(raw);
+    if (!parsed.ok) return parsed;
+    await repo.upsert(parsed.value);
+    return { ok: true, value: undefined };
+  };
+}
+]]></code>
+    <notes>Domain remains pure and deterministic; adapters perform IO and are replaceable.</notes>
+  </pattern>
+
+  <pattern name="storage_transaction_boundary">
+    <description>Keep transactions localized to adapter/service layers, not in domain core.</description>
+    <code language="rust"><![CDATA[
+// pseudo with sqlx
+pub async fn save_with_tx(pool: &sqlx::PgPool, it: domain::Interaction) -> eyre::Result<()> {
+    let mut tx = pool.begin().await?;
+    // perform queries using &mut tx
+    // sqlx::query!("...").execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(())
+}
+]]></code>
+  </pattern>
+
+  <pattern name="background_job_idempotency">
+    <description>Ensure at-least-once tasks are idempotent via keys and safe upserts.</description>
+    <code language="typescript"><![CDATA[
+async function processTask(taskId: string, repo: { markProcessed: (id: string) => Promise<boolean> }) {
+  // markProcessed must return false if already processed atomically (db constraint)
+  const firstTime = await repo.markProcessed(taskId);
+  if (!firstTime) return; // idempotent no-op
+  // ... do the work
+}
+]]></code>
+  </pattern>
+
+  <pattern name="event_bus_port_with_worker_adapter">
+    <description>Define event bus capability and provide a Cloudflare Worker adapter.</description>
+    <code language="typescript"><![CDATA[
+export interface EventBus {
+  publish(topic: string, payload: unknown): Promise<void>;
+}
+
+export class CfWorkerEventBus implements EventBus {
+  constructor(private endpoint: string, private token: string) {}
+  async publish(topic: string, payload: unknown): Promise<void> {
+    const res = await fetch(`${this.endpoint}/topics/${encodeURIComponent(topic)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Publish failed: ${res.status}`);
+  }
+}
+]]></code>
+  </pattern>
+</common_patterns>

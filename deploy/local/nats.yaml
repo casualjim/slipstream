@@ -1,0 +1,49 @@
+x-logging: &default-logging
+  driver: loki
+  options:
+    loki-url: "http://localhost:3100/api/prom/push"
+    loki-pipeline-stages: |
+      - multiline:
+          firstline: '^\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2}'
+          max_wait_time: 3s
+      - regex:
+          expression: '^(?P<time>\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2},\d{3}) (?P<message>(?s:.*))$$'
+
+services:
+  nats:
+    image: nats:alpine
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+      - "6222:6222"
+      - "8222:8222"
+    volumes:
+      - ./nats:/etc/nats:ro # Mount the configuration directory
+      - jetstream-data:/data/jetstream # Mount the JetStream data directory
+    command: ["-c", "/etc/nats/nats-server.conf"]
+    # depends_on:
+    #   - loki
+    # logging: *default-logging
+
+  surveyor:
+    image: natsio/nats-surveyor
+    container_name: nats-surveyor
+    restart: always
+    volumes:
+      - observations-data:/observations
+      - jetstream-data:/data/jetstream
+    command: |
+      -s nats://nats:4222 --accounts --observe /observations --jetstream /data/jetstream
+    labels:
+      org.label-schema.group: "nats-monitoring"
+    depends_on:
+      - nats
+    # logging: *default-logging
+
+volumes:
+  liftbridge-data:
+    driver: local
+  jetstream-data:
+    driver: local
+  observations-data:
+    driver: local

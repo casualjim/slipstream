@@ -8,9 +8,7 @@
 -- The index name is auto-generated unless explicitly named. Since 0001 used "UNIQUE (slug, organization, project)"
 -- SQLite will create an implicit index. We'll recreate the table schema via standard ALTER TABLE sequence.
 
-PRAGMA foreign_keys=off;
 
-BEGIN TRANSACTION;
 
 -- Create a new table with corrected constraints
 CREATE TABLE agents_new (
@@ -60,6 +58,4 @@ CREATE INDEX idx_agents_model ON agents (model);
 -- Helpful index for latest lookups
 CREATE INDEX idx_agents_slug_org_proj_createdAt ON agents (slug, organization, project, createdAt);
 
-COMMIT;
 
-PRAGMA foreign_keys=on;

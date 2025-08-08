@@ -149,23 +149,19 @@ const McpConfigStdioSchema = z.object({
   type: z.literal("stdio"),
   command: z.string().trim().min(1),
   args: z.array(z.string()).optional(),
-  env: z.record(z.string()).default({}),
+  env: z.record(z.string(), z.string()).default({}),
 });
 const McpConfigSseSchema = z.object({
   type: z.literal("sse"),
   url: z.string().trim().min(1),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 });
 const McpConfigHttpSchema = z.object({
   type: z.literal("http"),
   url: z.string().trim().min(1),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 });
-const McpConfigSchema = z.discriminatedUnion("type", [
-  McpConfigStdioSchema,
-  McpConfigSseSchema,
-  McpConfigHttpSchema,
-]);
+const McpConfigSchema = z.discriminatedUnion("type", [McpConfigStdioSchema, McpConfigSseSchema, McpConfigHttpSchema]);
 
 // Base Tool object (no effects)
 export const ToolBaseSchema = z.object({
@@ -180,7 +176,7 @@ export const ToolBaseSchema = z.object({
   provider: z.nativeEnum(ToolProvider).describe("The provider of the tool, indicating where it is executed."),
   name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).describe("The display name of the tool."),
   description: z.string().nullish().describe("A brief description of what the tool does."),
-  arguments: z.record(z.unknown()).nullish().describe("The JSON schema for the tool's arguments."), // JSON Schema object
+  arguments: z.record(z.string(), z.unknown()).nullish().describe("The JSON schema for the tool's arguments."), // JSON Schema object
 
   // New provider-specific configs
   restate: RestateConfigSchema.optional().describe("Restate configuration; required when provider is Restate"),
@@ -269,7 +265,7 @@ export const UpdateToolSchema = z
   .object({
     name: z.string().trim().regex(NAME_REGEX, NAME_ERROR).optional(),
     description: z.string().optional(),
-    arguments: z.record(z.unknown()).optional(), // JSON Schema object
+    arguments: z.record(z.string(), z.unknown()).optional(), // JSON Schema object
     restate: ToolBaseSchema.shape.restate.optional(),
     mcp: ToolBaseSchema.shape.mcp.optional(),
   })
@@ -353,7 +349,7 @@ export type Agent = z.infer<typeof AgentSchema>;
 // Use the generated Env interface directly
 // Extend Env to include our Durable Object namespace for EventHub
 // Extend Env to include our Durable Object namespace for EventHub
-export interface AppEnv extends Env{}
+export interface AppEnv extends Env {}
 
 // Define our auth context type
 export type AuthContext = {

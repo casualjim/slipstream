@@ -111,23 +111,33 @@ export class OrganizationService {
     sets.push("updatedAt = ?");
     values.push(nowIso());
 
-    if (sets.length === 0) {
+    if (sets.length === 1) { // Only updatedAt was added
       return this.get(slug);
     }
 
     const sql = `UPDATE organizations SET ${sets.join(", ")} WHERE slug = ?`;
     values.push(slug);
 
-    await this.db
-      .prepare(sql)
-      .bind(...values)
-      .run();
+    await this.db.batch([
+      this.db.prepare(sql).bind(...values),
+    ]);
     return this.get(slug);
   }
 
   async delete(slug: string) {
-    const res = await this.db.prepare(`DELETE FROM organizations WHERE slug = ?`).bind(slug).run();
-    const changes = (res as any)?.meta?.changes ?? (res as any)?.changes;
+    const res = await this.db.batch([
+      this.db.prepare(`SELECT 1 FROM projects WHERE organization = ? LIMIT 1`).bind(slug),
+      this.db.prepare(`DELETE FROM organizations WHERE slug = ?`).bind(slug),
+    ]);
+
+    const selectRes = res[0];
+    const hasProjects = selectRes.results && selectRes.results.length > 0;
+    if (hasProjects) {
+      throw new Error("Cannot delete organization with existing projects");
+    }
+
+    const deleteRes = res[1];
+    const changes = deleteRes.meta?.changes;
     if (typeof changes === "number") return changes > 0;
 
     const still = await this.db.prepare(`SELECT 1 FROM organizations WHERE slug = ?`).bind(slug).first();
@@ -171,7 +181,7 @@ export class OrganizationService {
       .prepare(countSql)
       .bind(...bind)
       .first<{ total: number }>();
-    const total_count = (countRow?.total as number) ?? 0;
+    const total_count = countRow?.total ?? 0;
 
     const sql = `
       SELECT slug, name, description, createdAt, updatedAt
@@ -184,7 +194,7 @@ export class OrganizationService {
       .prepare(sql)
       .bind(...bind)
       .all<OrganizationDbRow>();
-    const items = (res.results ?? []).map((r) => serializeRow(r));
+    const items = res.results.map((r) => serializeRow(r));
 
     return {
       items,

@@ -1,0 +1,38 @@
+<communication_guidelines>
+  <stance>
+    Direct, technical, and explicit. Summarize constraints, decisions, and tradeoffs succinctly. Avoid conversational fluff. Provide acceptance checklists that align with multiple goals (correctness, simplicity, performance, cost, operability, evolvability, testability).
+  </stance>
+
+  <decision_records>
+    <template>
+      <adr>
+        <context>What problem are we solving and what constraints apply?</context>
+        <decision>Chosen approach and minimal interface(s) introduced.</decision>
+        <alternatives>Briefly list plausible alternatives considered.</alternatives>
+        <tradeoffs>Why this option is simplest/cheapest while meeting goals; known limitations.</tradeoffs>
+        <consequences>Operator and developer impact; migration or rollback considerations.</consequences>
+      </adr>
+    </template>
+    <best_practices>
+      <rule>Keep ADR notes close to code (inline comments or short docs/notes).</rule>
+      <rule>Prefer one paragraph per section; avoid verbosity.</rule>
+      <rule>Update notes when constraints change (e.g., new performance SLOs).</rule>
+    </best_practices>
+  </decision_records>
+
+  <multi_goal_acceptance_checklist>
+    <item>Correctness: Invariants encoded; errors handled with context; edge cases covered.</item>
+    <item>Simplicity: Minimal APIs; low fan-out; few dependencies; clear data flow.</item>
+    <item>Performance: Reasonable baseline; profiling plan exists if needed; no premature micro-opts.</item>
+    <item>Cost: Storage/compute choices justified; avoid unnecessary services.</item>
+    <item>Operability: Logs/metrics minimal and useful; failure modes understood; idempotency where needed.</item>
+    <item>Evolvability: Isolation via ports/adapters; internal refactors don't break contracts.</item>
+    <item>Testability: Contract tests at boundaries; deterministic pure core; limited mocking.</item>
+  </multi_goal_acceptance_checklist>
+
+  <user_interaction>
+    <rule>When requirements are ambiguous, ask for clarification with 2–4 precise options that are complete answers.</rule>
+    <rule>When proposing changes, present a tiny plan first (1–3 steps) and proceed upon confirmation.</rule>
+    <rule>State assumptions explicitly; avoid hidden decisions.</rule>
+  </user_interaction>
+</communication_guidelines>

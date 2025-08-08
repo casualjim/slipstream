@@ -14,6 +14,4 @@ cd "$proj_dir" || exit 1
 shopt -s globstar
 rustfmt --edition 2024 crates/**/*.rs
 echo "Rust code formatted successfully"
-mise sort-deps
-echo "Dependencies sorted successfully"
 echo "✅ Rust code formatting complete!"
