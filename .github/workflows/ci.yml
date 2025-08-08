@@ -26,19 +26,10 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v2
-
-      - name: Restore mise cache
-        uses: actions/cache@v4
         with:
-          path: |
-            ~/.local/share/mise
-            ~/.cache/mise
-          key: ${{ runner.os }}-mise-${{ hashFiles('.mise.*', '**/bun.lock', '**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mise-
-
-      - name: Install toolchain
-        run: mise install
+          install: true
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test
         run: mise test
