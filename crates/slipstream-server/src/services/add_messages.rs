@@ -4,13 +4,10 @@ use crate::models::AddMessages;
 use axum::http::StatusCode;
 
 /// Service function to add messages to memory
-/// 
+///
 /// This function is currently stubbed and will return a 501 Not Implemented error.
 /// Future implementation will process the messages and add them to the graph memory.
-pub async fn add_messages_service(
-  _state: &AppState,
-  request: AddMessages,
-) -> Result<(), AppError> {
+pub async fn add_messages_service(_state: &AppState, request: AddMessages) -> Result<(), AppError> {
   tracing::info!(
     group_id = %request.group_id,
     message_count = request.messages.len(),
@@ -29,6 +26,8 @@ pub async fn add_messages_service(
   }
 
   // Return 501 Not Implemented for now
-  Err(AppError::new("Message processing not yet implemented")
-    .with_status(StatusCode::NOT_IMPLEMENTED))
+  Err(
+    AppError::new("Message processing not yet implemented")
+      .with_status(StatusCode::NOT_IMPLEMENTED),
+  )
 }

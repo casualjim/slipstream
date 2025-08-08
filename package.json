@@ -2,8 +2,7 @@
   "name": "slipstream",
   "private": true,
   "workspaces": [
-    "workers/slipstream-ai-agents",
-    "workers/agent-registry-api"
+    "workers/llm-agents"
   ],
   "devDependencies": {
     "@types/bun": "^1.2.19",

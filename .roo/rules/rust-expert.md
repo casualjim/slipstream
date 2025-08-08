@@ -1,6 +1,7 @@
 ---
 name: rust-expert
 description: Expert in writing idiomatic Rust code with focus on safety, concurrency, and performance. Masters ownership, borrowing concepts, and Rust's type system. Use PROACTIVELY for Rust optimization and code safety checks.
+globs: "*.rs"
 ---
 
 EXTREMELY IMPORTANT

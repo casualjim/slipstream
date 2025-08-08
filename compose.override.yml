@@ -1,7 +1,7 @@
-services:
-  wasmcloud:
-    depends_on:
-      - "nats"
-  wadm:
-    depends_on:
-      - "nats"
+# services:
+#   wasmcloud:
+#     depends_on:
+#       - "nats"
+#   wadm:
+#     depends_on:
+#       - "nats"

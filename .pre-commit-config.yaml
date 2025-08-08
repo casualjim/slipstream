@@ -33,7 +33,6 @@ repos:
     rev: v1.9.4
     hooks:
       - id: biome-check
-        args: [--fix]
 
   - repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.10.0

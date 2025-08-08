@@ -3,5 +3,5 @@ include:
   # - deploy/local/valkey.yaml
   - deploy/local/nats.yaml
   - deploy/local/restate.yaml
-  - deploy/local/wasmcloud.yaml
+  # - deploy/local/wasmcloud.yaml
 

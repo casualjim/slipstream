@@ -5,19 +5,21 @@
   "bun.runtime": "/Users/ivan/.local/share/mise/shims/bun",
   "[typescript]": {
     "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.organizeImports": "always",
       "source.fixAll.biome": "always"
     }
   },
   "[typescriptreact]": {
     "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.organizeImports": "always",
       "source.fixAll.biome": "always"
     }
   },
+  "typescript.format.enable": false,
+  "javascript.format.enable": false,
   "files.associations": {
     "wrangler.json": "jsonc"
-  }
+  },
 }

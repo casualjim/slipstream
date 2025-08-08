@@ -12,7 +12,7 @@ You are conducting a critical code review as a tech lead responsible for product
 
 ### What to Focus On:
 - Tests that would pass while production is broken
-- Tests that duplicate each other without adding value  
+- Tests that duplicate each other without adding value
 - Missing edge cases that cause real production failures
 - Tests that hide failures with conditional assertions
 
