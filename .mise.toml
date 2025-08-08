@@ -10,7 +10,7 @@ mkcert = "latest"
 "aqua:protocolbuffers/protobuf/protoc" = "latest"
 bun = "latest"
 "cargo:cargo-sort" = "latest"
-"ubi:j178/prefligit" = "latest"
+"ubi:j178/prek" = "0.0.23"
 
 [env]
 _.file = ".dev.vars"

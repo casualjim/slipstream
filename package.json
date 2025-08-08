@@ -1,9 +1,7 @@
 {
   "name": "slipstream",
   "private": true,
-  "workspaces": [
-    "workers/llm-agents"
-  ],
+  "workspaces": ["workers/llm-agents"],
   "devDependencies": {
     "@types/bun": "^1.2.19",
     "uuid": "^11.1.0"

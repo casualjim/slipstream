@@ -9,6 +9,6 @@ echo "🔍 Starting Slipstream linting..."
 proj_dir=$(git rev-parse --show-toplevel)
 cd "$proj_dir" || exit 1
 
-prefligit run --all-files
+prek run --all-files
 
 echo "✅ Slipstream linting complete!"

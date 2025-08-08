@@ -1,5 +1,5 @@
-import * as restate from "@restatedev/restate-sdk/fetch";
 import { serde } from "@restatedev/restate-sdk-zod";
+import * as restate from "@restatedev/restate-sdk/fetch";
 import { z } from "zod";
 
 export function sendNotification(greetingId: string, name: string) {

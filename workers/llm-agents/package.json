@@ -1,8 +1,7 @@
 {
   "name": "slipstream-ai-agents",
   "type": "module",
-  "scripts": {
-  },
+  "scripts": {},
   "dependencies": {
     "hono": "4.9.0",
     "@restatedev/restate-sdk": "1.8.1",
