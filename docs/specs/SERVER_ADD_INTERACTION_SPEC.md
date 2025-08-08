@@ -264,7 +264,7 @@ sequenceDiagram
     Resolver-->>CoreGraph: Accepted and invalidated relations
     CoreGraph->>Enricher: Extract entity attributes
     Enricher-->>CoreGraph: Hydrated entities
-    CoreGraph->>CoreGraph: Build duplicate-of and mention links 
+    CoreGraph->>CoreGraph: Build duplicate-of and mention links
     CoreGraph->>CoreGraph: attach relation identifiers
     CoreGraph->>Persister: Persist episode, entities, mentions, relations
     Persister-->>CoreGraph: Persisted
@@ -346,7 +346,7 @@ graph TD
     A[Ingest Router<br>/messages] --> B[Worker Queue<br>enqueue tasks]
     B --> C[Background Worker]
     C --> D[Core Graph System<br>Add Episode Flow]
-    
+
     D --> D1[Validate inputs]
     D --> D2[Load/Create episode]
     D --> D3[Extract entities]
@@ -358,7 +358,7 @@ graph TD
     D --> D9[Build mentions]
     D --> D10[Persist & embed]
     D --> D11[Update communities]
-    
+
     style D fill:#f9f,stroke:#333,stroke-width:2px
 ```
 
