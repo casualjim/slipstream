@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 aide = { version = "0.15", features = ["axum-json", "axum-query", "axum-matched-path", "axum-tokio", "axum-extra-query", "axum-extra-json-deserializer", "redoc", "scalar"] }
-async-compression = { version = "0.4", features = ["brotli", "gzip", "deflate", "deflate64", "zlib", "tokio"] }
+async-compression = { version = "0.4", features = ["gzip", "deflate", "deflate64", "zlib", "tokio"] }
 axum = { version = "0.8.4", features = ["macros", "multipart", "ws", "http2"] }
 axum-helmet = "0.2.0"
 axum-otel-metrics = "0.12.0"
