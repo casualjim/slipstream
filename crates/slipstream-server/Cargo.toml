@@ -39,7 +39,9 @@ tower-http = { version = "0.6.6", features = [
   "tracing",
   "trace",
   "cors",
-  "compression-full",
+  "compression-gzip",
+  "compression-deflate",
+  "compression-zstd",
 ] }
 tower-layer = { version = "0.3.3" }
 tracing.workspace = true
