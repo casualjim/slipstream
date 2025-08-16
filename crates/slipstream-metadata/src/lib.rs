@@ -1,7 +1,7 @@
 mod config;
 mod definitions;
 mod error;
-mod http;
+// mod http;
 mod memory;
 mod nats;
 mod store;

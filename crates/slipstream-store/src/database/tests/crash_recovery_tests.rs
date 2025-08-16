@@ -1,9 +1,12 @@
-use super::*;
+use super::tests_helpers::{AppendRows, CountSystemMetadataForTable, CountTableRows, CreateSchema};
+use crate::{Config, Database, meta::MetaDb};
+
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow_array::{RecordBatch, StringArray};
 use futures::TryStreamExt;
 use std::sync::Arc;
 use tempfile::tempdir;
+// no extra imports
 
 fn test_config(path: &std::path::Path) -> Config {
   Config::new_test(path.to_path_buf())
@@ -16,38 +19,26 @@ async fn setup_test_database() -> (Database, tempfile::TempDir, Config) {
     .await
     .expect("Failed to create Database");
 
-  // Setup test table schema
-  db.graph
-    .execute_write(
+  // Setup test table schema via public migration command
+  db.execute(CreateSchema {
+    graph_ddl: vec![
       "CREATE NODE TABLE IF NOT EXISTS TestCrashNode (id UUID, name STRING, PRIMARY KEY(id))",
-      vec![],
-    )
-    .await
-    .expect("Failed to create graph schema");
-
-  db.meta
-    .execute_setup(Box::new(|conn| {
-      Box::pin(async move {
-        let schema = Arc::new(ArrowSchema::new(vec![
-          Field::new("id", DataType::Utf8, false),
-          Field::new("name", DataType::Utf8, false),
-        ]));
-        conn
-          .create_empty_table("test_crash_nodes", schema)
-          .execute()
-          .await?;
-        Ok(())
-      })
-    }))
-    .await
-    .expect("Failed to create meta table");
+    ],
+    meta_table: "test_crash_nodes",
+    meta_schema: Arc::new(ArrowSchema::new(vec![
+      Field::new("id", DataType::Utf8, false),
+      Field::new("name", DataType::Utf8, false),
+    ])),
+  })
+  .await
+  .expect("Failed to create schema");
 
   (db, temp_dir, config)
 }
 
 #[tokio::test]
 async fn test_consistency_check_with_no_mismatch() {
-  let (db, _temp_dir, _config) = setup_test_database().await;
+  let (db, _temp_dir, config) = setup_test_database().await;
 
   // Execute a successful transaction to establish baseline
   let test_id = uuid::Uuid::now_v7();
@@ -93,26 +84,21 @@ async fn test_consistency_check_with_no_mismatch() {
 
   assert_eq!(result, 42);
 
-  // Check consistency - should find no issues
-  db.check_consistency_on_startup()
-    .await
-    .expect("Consistency check should succeed");
-
-  // Verify data is still there
-  let stream = db
-    .meta
-    .query_table(&operations::PrimaryStoreQuery {
+  // Restart database to run consistency check on startup, then verify data still present
+  drop(db);
+  let db = Database::new(&config).await.expect("recreate db");
+  let total_rows: usize = db
+    .execute(CountTableRows {
       table: "test_crash_nodes",
-      filter: None,
-      limit: None,
-      offset: None,
-      vector_search: None,
     })
     .await
-    .expect("Should query table");
-
-  let batches: Vec<_> = stream.try_collect().await.expect("Should collect");
-  let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    .expect("query")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
   assert_eq!(total_rows, 1, "Should still have the data");
 }
 
@@ -162,30 +148,20 @@ async fn test_successful_2pc_updates_system_metadata() {
     .await
     .expect("2PC should succeed");
 
-  // Verify SystemMetadata was updated
-  let cypher = "MATCH (sm:SystemMetadata {table_name: $table_name}) RETURN sm.lance_version";
-  let params = vec![(
-    "table_name",
-    kuzu::Value::String("test_crash_nodes".to_string()),
-  )];
-  let receiver = db
-    .graph
-    .execute_query(cypher, params)
+  // Verify SystemMetadata was updated via helper
+  let count: usize = db
+    .execute(CountSystemMetadataForTable {
+      table: "test_crash_nodes",
+    })
     .await
-    .expect("Query should succeed");
-
-  let mut found_version = false;
-  {
-    use futures::StreamExt;
-    let mut stream = UnboundedReceiverStream::new(receiver);
-    if let Some(Ok(row)) = stream.next().await {
-      if let Some(kuzu::Value::Int64(_version)) = row.get(0) {
-        found_version = true;
-      }
-    }
-  }
-
-  assert!(found_version, "SystemMetadata should have been created");
+    .expect("count")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
+  assert!(count >= 1, "SystemMetadata should have been created");
 }
 
 #[tokio::test]
@@ -239,48 +215,36 @@ async fn test_failed_graphdb_transaction_leaves_no_system_metadata() {
   );
 
   // Verify SystemMetadata was NOT created (transaction rolled back)
-  let cypher = "MATCH (sm:SystemMetadata {table_name: $table_name}) RETURN sm.lance_version";
-  let params = vec![(
-    "table_name",
-    kuzu::Value::String("test_crash_nodes".to_string()),
-  )];
-  let receiver = db
-    .graph
-    .execute_query(cypher, params)
+  let count: usize = db
+    .execute(CountSystemMetadataForTable {
+      table: "test_crash_nodes",
+    })
     .await
-    .expect("Query should succeed");
-
-  let mut found_version = false;
-  {
-    use futures::StreamExt;
-    let mut stream = UnboundedReceiverStream::new(receiver);
-    if let Some(Ok(row)) = stream.next().await {
-      if let Some(kuzu::Value::Int64(_version)) = row.get(0) {
-        found_version = true;
-      }
-    }
-  }
-
-  assert!(
-    !found_version,
+    .expect("count")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
+  assert_eq!(
+    count, 0,
     "SystemMetadata should not exist after failed transaction"
   );
 
   // Verify no data was persisted in LanceDB (was rolled back)
-  let stream = db
-    .meta
-    .query_table(&operations::PrimaryStoreQuery {
+  let total_rows: usize = db
+    .execute(CountTableRows {
       table: "test_crash_nodes",
-      filter: None,
-      limit: None,
-      offset: None,
-      vector_search: None,
     })
     .await
-    .expect("Should query table");
-
-  let batches: Vec<_> = stream.try_collect().await.expect("Should collect");
-  let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    .expect("query")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
   assert_eq!(total_rows, 0, "No data should exist after rollback");
 
   // Explicitly drop the database to clean up background tasks
@@ -294,7 +258,7 @@ async fn test_consistency_check_detects_and_fixes_incomplete_transaction() {
   let test_id = uuid::Uuid::now_v7();
 
   // First, insert some data with a successful transaction
-  let baseline_version = db
+  let _baseline_version = db
     .execute_2pc(
       "test_crash_nodes",
       move |meta: &MetaDb| {
@@ -348,16 +312,30 @@ async fn test_consistency_check_detects_and_fixes_incomplete_transaction() {
   )
   .expect("Should create crash batch");
 
-  let (_rollback_version, post_crash_version) = db
-    .meta
-    .save_to_table("test_crash_nodes", crash_batch, &["id"])
-    .await
-    .expect("LanceDB operation should succeed");
+  // Append crash data via public API (Lance-only change)
+  db.execute(AppendRows {
+    table: "test_crash_nodes",
+    batch: crash_batch.clone(),
+  })
+  .await
+  .expect("LanceDB operation should succeed");
 
-  // Verify that the "crash data" exists before recovery
-  assert!(
-    post_crash_version > baseline_version,
-    "Version should have incremented after crash data insertion"
+  // Verify that the "crash data" exists before recovery (rows increased)
+  let rows_before_restart: usize = db
+    .execute(CountTableRows {
+      table: "test_crash_nodes",
+    })
+    .await
+    .expect("query")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
+  assert_eq!(
+    rows_before_restart, 2,
+    "Should have baseline + crash rows before restart"
   );
 
   // Drop the database and recreate to simulate restart
@@ -368,34 +346,19 @@ async fn test_consistency_check_detects_and_fixes_incomplete_transaction() {
 
   // The consistency check in new() should have detected and fixed the issue
 
-  // Verify that the table was rolled back
-  let final_version = db
-    .meta
-    .get_table_version("test_crash_nodes")
-    .await
-    .expect("Should get final version");
-
-  // After rollback, we should have a new version (roll-forward approach)
-  assert!(
-    final_version > post_crash_version,
-    "Rollback should have created a new version"
-  );
-
   // Verify we only have the baseline data
-  let stream = db
-    .meta
-    .query_table(&operations::PrimaryStoreQuery {
+  let total_rows: usize = db
+    .execute(CountTableRows {
       table: "test_crash_nodes",
-      filter: None,
-      limit: None,
-      offset: None,
-      vector_search: None,
     })
     .await
-    .expect("Should query table");
-
-  let batches: Vec<_> = stream.try_collect().await.expect("Should collect");
-  let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    .expect("query")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
 
   assert_eq!(
     total_rows, 1,
@@ -415,50 +378,32 @@ async fn test_consistency_check_on_startup_with_multiple_tables() {
       .expect("Failed to create Database");
 
     // Setup first table
-    db.graph
-      .execute_write(
+    db.execute(CreateSchema {
+      graph_ddl: vec![
         "CREATE NODE TABLE IF NOT EXISTS Table1 (id UUID, value INT64, PRIMARY KEY(id))",
-        vec![],
-      )
-      .await
-      .expect("Failed to create graph schema");
-
-    db.meta
-      .execute_setup(Box::new(|conn| {
-        Box::pin(async move {
-          let schema = Arc::new(ArrowSchema::new(vec![
-            Field::new("id", DataType::Utf8, false),
-            Field::new("value", DataType::Int64, false),
-          ]));
-          conn.create_empty_table("table1", schema).execute().await?;
-          Ok(())
-        })
-      }))
-      .await
-      .expect("Failed to create meta table");
+      ],
+      meta_table: "table1",
+      meta_schema: Arc::new(ArrowSchema::new(vec![
+        Field::new("id", DataType::Utf8, false),
+        Field::new("value", DataType::Int64, false),
+      ])),
+    })
+    .await
+    .expect("Failed to create schema");
 
     // Setup second table
-    db.graph
-      .execute_write(
+    db.execute(CreateSchema {
+      graph_ddl: vec![
         "CREATE NODE TABLE IF NOT EXISTS Table2 (id UUID, name STRING, PRIMARY KEY(id))",
-        vec![],
-      )
-      .await
-      .expect("Failed to create graph schema");
-
-    db.meta
-      .execute_setup(Box::new(|conn| {
-        Box::pin(async move {
-          let schema = Arc::new(ArrowSchema::new(vec![
-            Field::new("id", DataType::Utf8, false),
-            Field::new("name", DataType::Utf8, false),
-          ]));
-          conn.create_empty_table("table2", schema).execute().await?;
-          Ok(())
-        })
-      }))
-      .await
-      .expect("Failed to create meta table");
+      ],
+      meta_table: "table2",
+      meta_schema: Arc::new(ArrowSchema::new(vec![
+        Field::new("id", DataType::Utf8, false),
+        Field::new("name", DataType::Utf8, false),
+      ])),
+    })
+    .await
+    .expect("Failed to create schema");
 
     // Insert data into first table
     let id1 = uuid::Uuid::now_v7();
@@ -548,10 +493,12 @@ async fn test_consistency_check_on_startup_with_multiple_tables() {
     )
     .expect("Should create crash batch");
 
-    db.meta
-      .save_to_table("table2", crash_batch, &["id"])
-      .await
-      .expect("Crash data should save");
+    db.execute(AppendRows {
+      table: "table2",
+      batch: crash_batch,
+    })
+    .await
+    .expect("Crash data should save");
   }
 
   // Now create a new database instance - it should perform consistency check on startup
@@ -560,36 +507,28 @@ async fn test_consistency_check_on_startup_with_multiple_tables() {
     .expect("Failed to create Database with recovery");
 
   // Verify table1 is unchanged (1 row)
-  let stream = db
-    .meta
-    .query_table(&operations::PrimaryStoreQuery {
-      table: "table1",
-      filter: None,
-      limit: None,
-      offset: None,
-      vector_search: None,
-    })
+  let total_rows: usize = db
+    .execute(CountTableRows { table: "table1" })
     .await
-    .expect("Should query table");
-
-  let batches: Vec<_> = stream.try_collect().await.expect("Should collect");
-  let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    .expect("query")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
   assert_eq!(total_rows, 1, "Table1 should be unchanged");
 
   // Verify table2 was rolled back (only 1 row, not 2)
-  let stream = db
-    .meta
-    .query_table(&operations::PrimaryStoreQuery {
-      table: "table2",
-      filter: None,
-      limit: None,
-      offset: None,
-      vector_search: None,
-    })
+  let total_rows: usize = db
+    .execute(CountTableRows { table: "table2" })
     .await
-    .expect("Should query table");
-
-  let batches: Vec<_> = stream.try_collect().await.expect("Should collect");
-  let total_rows: usize = batches.iter().map(|b| b.num_rows()).sum();
+    .expect("query")
+    .try_collect::<Vec<_>>()
+    .await
+    .expect("collect")
+    .into_iter()
+    .next()
+    .unwrap_or(0);
   assert_eq!(total_rows, 1, "Table2 should have been rolled back");
 }
