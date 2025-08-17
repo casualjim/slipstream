@@ -1,6 +1,10 @@
 services:
   falkordb:
     image: falkordb/falkordb:latest
+    environment:
+      REDIS_ARGS: "--port 6390"
+      PORT: "3379"
+      NEXTAUTH_URL: "http://localhost:3379/"
     ports:
-      - "127.0.0.1:6379:6379"
-      - "127.0.0.1:3379:3000"
+      - "127.0.0.1:6390:6390"
+      - "127.0.0.1:3379:3379"

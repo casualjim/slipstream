@@ -1,0 +1,32 @@
+services:
+  tensorzero-gateway:
+    image: tensorzero/gateway
+    volumes:
+      - ./tensorzero:/app/config:ro
+    command: --config-file /app/config/tensorzero.toml
+    environment:
+      TENSORZERO_CLICKHOUSE_URL: "http://clickhouse@CHANGEME:clickhouse:8123/tensorzero"
+    env_file:
+      - ${ENV_FILE:-../../.env}
+    ports:
+      - "127.0.0.1:9463:9463"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: wget --spider --tries 1 http://localhost:9463/status
+      interval: 15s
+      timeout: 1s
+      retries: 2
+
+  tensorzero-ui:
+    image: tensorzero/ui
+    volumes:
+      - ./tensorzero:/app/config:ro
+    environment:
+      PORT: "4523"
+      TENSORZERO_GATEWAY_URL: "http://tensorzero-gateway:9463"
+    env_file:
+      - ${ENV_FILE:-../../.env}
+    ports:
+      - "127.0.0.1:4523:4523"
