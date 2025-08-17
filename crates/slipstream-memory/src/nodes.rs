@@ -64,7 +64,7 @@ impl ToDatabase for Interaction {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     use time::OffsetDateTime;
 
     // Only include properties used in WHERE, ORDER BY, or graph traversal queries
@@ -90,7 +90,7 @@ impl ToDatabase for Interaction {
     ])
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
     use arrow_array::ListArray;
 
     // Create arrays for each field
@@ -379,7 +379,7 @@ impl ToDatabase for Concept {
   type MetaContext = i32; // embedding dimensions
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     use time::OffsetDateTime;
 
     // GraphDB only stores minimal fields for graph operations
@@ -398,7 +398,7 @@ impl ToDatabase for Concept {
     ])
   }
 
-  fn into_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
     use arrow_array::ListArray;
 
     let embedding_dimensions = ctx;
@@ -627,7 +627,7 @@ impl ToDatabase for Theme {
   type MetaContext = i32; // embedding dimensions
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     use time::OffsetDateTime;
 
     // Only include properties used in WHERE, ORDER BY, or graph traversal queries
@@ -645,7 +645,7 @@ impl ToDatabase for Theme {
     ])
   }
 
-  fn into_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
     use arrow_array::ListArray;
 
     let embedding_dimensions = ctx;
@@ -857,13 +857,13 @@ mod tests {
     };
 
     // Test graph conversion
-    let graph_values = interaction.into_graph_value(()).unwrap();
+    let graph_values = interaction.as_graph_value(()).unwrap();
     assert_eq!(graph_values.len(), 4); // Only covering index properties
     assert_eq!(graph_values[0].0, "uuid");
     assert_eq!(graph_values[1].0, "group_id");
 
     // Test meta conversion
-    let batch = interaction.into_meta_value(()).unwrap();
+    let batch = interaction.as_meta_value(()).unwrap();
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 11);
   }
@@ -885,11 +885,11 @@ mod tests {
     };
 
     // Test graph conversion
-    let graph_values = concept.into_graph_value(()).unwrap();
+    let graph_values = concept.as_graph_value(()).unwrap();
     assert_eq!(graph_values.len(), 4); // uuid, name, group_id, created_at for graph
 
     // Test meta conversion with embedding dimensions
-    let batch = concept.into_meta_value(384).unwrap();
+    let batch = concept.as_meta_value(384).unwrap();
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 8);
   }
@@ -907,11 +907,11 @@ mod tests {
     };
 
     // Test graph conversion
-    let graph_values = theme.into_graph_value(()).unwrap();
+    let graph_values = theme.as_graph_value(()).unwrap();
     assert_eq!(graph_values.len(), 3); // Only covering index properties
 
     // Test meta conversion with embedding dimensions
-    let batch = theme.into_meta_value(384).unwrap();
+    let batch = theme.as_meta_value(384).unwrap();
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 7);
   }
@@ -937,7 +937,7 @@ mod tests {
     };
 
     // Should still work with zeros
-    let batch = concept.into_meta_value(384).unwrap();
+    let batch = concept.as_meta_value(384).unwrap();
     assert_eq!(batch.num_rows(), 1);
   }
 }

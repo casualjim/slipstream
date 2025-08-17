@@ -32,7 +32,12 @@ pub use traits::{CommandExecutor, DatabaseCommand, FromRecordBatchRow, ToDatabas
 pub use queries::{empty_filter, extract_uuids_to_in_clause};
 pub use streams::ResultStream;
 
-// Test module with common initialization
+// Internal use of our embedding function
+use embeddings::create_embedding_function_from_config;
+
+pub use crate::config::Config;
+
+// Test module with common initialization (placed at end to avoid clippy::items-after-test-module)
 #[cfg(test)]
 mod tests {
   use ctor::ctor;
@@ -48,15 +53,6 @@ mod tests {
       .with_filter(env_filter);
 
     let _ = tracing_subscriber::registry().with(subscriber).try_init();
-    let _ = std::panic::catch_unwind(|| color_backtrace::install());
+    let _ = std::panic::catch_unwind(color_backtrace::install);
   }
 }
-
-// Internal use of our embedding function
-use embeddings::create_embedding_function_from_config;
-
-use std::sync::Arc;
-
-pub use crate::config::Config;
-
-  

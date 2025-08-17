@@ -81,7 +81,7 @@ impl Database {
       let mut stream = UnboundedReceiverStream::new(receiver);
       while let Some(Ok(row)) = stream.next().await {
         if let (Some(kuzu::Value::String(table)), Some(kuzu::Value::Int64(version))) =
-          (row.get(0), row.get(1))
+          (row.first(), row.get(1))
         {
           tables_to_check.push((table.clone(), *version as u64));
         }
@@ -233,13 +233,10 @@ impl Database {
             transformer,
           } => {
             // Convert data to formats for both databases (before moving into closure)
-            let graph_params = data.into_graph_value(graph_context)?;
-            let meta_batch = data.into_meta_value(meta_context)?;
+            let graph_params = data.as_graph_value(graph_context)?;
+            let meta_batch = data.as_meta_value(meta_context)?;
             // Get primary key columns from the type
             let primary_keys = C::SaveData::primary_key_columns();
-            // Rebind static strings as local variables to avoid allocation
-            let cypher = cypher;
-            let table = table;
 
             // Use 2PC to ensure consistency
             self
@@ -277,7 +274,7 @@ impl Database {
             // Convert all items to a single RecordBatch for LanceDB
             let batches: Result<Vec<_>> = data
               .iter()
-              .map(|item| item.into_meta_value(meta_context.clone()))
+              .map(|item| item.as_meta_value(meta_context.clone()))
               .collect();
             let batches = batches?;
 
@@ -288,19 +285,18 @@ impl Database {
 
             // Concatenate all batches into one
             let meta_batch = arrow::compute::concat_batches(&batches[0].schema(), &batches)
-              .map_err(|e| crate::Error::Arrow(e))?;
+              .map_err(crate::Error::Arrow)?;
 
             // Convert all items to individual graph parameters
             let graph_operations: Result<Vec<_>> = data
               .iter()
               .map(|item| {
-                let params = item.into_graph_value(graph_context.clone())?;
+                let params = item.as_graph_value(graph_context.clone())?;
                 Ok((cypher.to_string(), params))
               })
               .collect();
             let graph_operations = graph_operations?;
 
-            let table = table;
             let item_count = data.len();
             // Get primary key columns from the type
             let primary_keys = C::SaveData::primary_key_columns();
@@ -342,7 +338,7 @@ impl Database {
         for ddl in graph_ddl {
           // Try to execute each DDL statement, but don't fail on errors
           // (e.g., relationship tables that depend on tables that don't exist yet)
-          match self.graph.execute_write(&ddl, vec![]).await {
+          match self.graph.execute_write(ddl, vec![]).await {
             Ok(_) => tracing::info!("Executed graph DDL: {}", ddl),
             Err(e) => tracing::warn!("Graph DDL failed (may be expected): {} - {}", ddl, e),
           }
@@ -469,10 +465,7 @@ impl Database {
       let mut all_graph_queries = graph_queries;
       if let Some((table, version)) = new_lance_version {
         let timestamp = jiff::Timestamp::now().to_string();
-        let update_query = format!(
-          "MERGE (sm:SystemMetadata {{table_name: $table_name}})
-           SET sm.lance_version = $version, sm.last_updated = $timestamp"
-        );
+        let update_query = "MERGE (sm:SystemMetadata {table_name: $table_name}) SET sm.lance_version = $version, sm.last_updated = $timestamp".to_string();
         let params = vec![
           ("table_name", kuzu::Value::String(table.to_string())),
           ("version", kuzu::Value::Int64(version as i64)),
@@ -508,7 +501,7 @@ impl Database {
                   version
                 );
                 let rollback_result = tokio::runtime::Handle::current()
-                  .block_on(meta.rollback_to_version(&table_name, version));
+                  .block_on(meta.rollback_to_version(table_name, version));
 
                 if let Err(rollback_err) = rollback_result {
                   tracing::error!("Failed to rollback LanceDB: {}", rollback_err);
@@ -532,7 +525,7 @@ impl Database {
               version
             );
             let rollback_result = tokio::runtime::Handle::current()
-              .block_on(meta.rollback_to_version(&table_name, version));
+              .block_on(meta.rollback_to_version(table_name, version));
 
             if let Err(rollback_err) = rollback_result {
               tracing::error!("Failed to rollback LanceDB: {}", rollback_err);

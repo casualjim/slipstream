@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures::Stream;
 use pin_project_lite::pin_project;
 
 use crate::Result;
+use crate::streams::{DefaultStream, ResultStream};
 
 pin_project! {
     /// A stream that yields items in a specific order by joining two streams:
@@ -14,9 +14,9 @@ pin_project! {
     /// - A stream of (key, item) pairs in arbitrary order
     pub struct OrderedStream<T, K> {
         #[pin]
-        keys: Box<dyn Stream<Item = K> + Send + Unpin>,
+        keys: DefaultStream<K>,
         #[pin]
-        items: Box<dyn Stream<Item = Result<(K, T)>> + Send + Unpin>,
+        items: ResultStream<(K, T)>,
         buffer: HashMap<K, T>,
         items_done: bool,
         current_key: Option<K>,
@@ -29,12 +29,12 @@ where
 {
   pub fn new<KS, IS>(keys: KS, items: IS) -> Self
   where
-    KS: Stream<Item = K> + Send + Unpin + 'static,
-    IS: Stream<Item = Result<(K, T)>> + Send + Unpin + 'static,
+    KS: Stream<Item = K> + Send + 'static,
+    IS: Stream<Item = Result<(K, T)>> + Send + 'static,
   {
     Self {
-      keys: Box::new(keys),
-      items: Box::new(items),
+      keys: Box::pin(keys),
+      items: Box::pin(items),
       buffer: HashMap::new(),
       items_done: false,
       current_key: None,
@@ -49,7 +49,7 @@ where
 {
   type Item = Result<T>;
 
-  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+  fn poll_next(self: core::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     let mut this = self.project();
 
     loop {

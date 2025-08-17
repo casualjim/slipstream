@@ -73,11 +73,11 @@ async fn test_concurrent_meta_writes() {
         schema_clone,
         vec![
           Arc::new(Int64Array::from(vec![i])) as arrow_array::ArrayRef,
-          Arc::new(StringArray::from(vec![format!("value_{}", i)])) as arrow_array::ArrayRef,
+          Arc::new(StringArray::from(vec![format!("value_{i}")])) as arrow_array::ArrayRef,
         ],
       )?;
 
-      let _ = actor_clone
+      actor_clone
         .execute_2pc(
           "concurrent_test",
           move |meta: &MetaDb| {
@@ -100,7 +100,7 @@ async fn test_concurrent_meta_writes() {
   // All writes should succeed due to MVCC
   let results: Vec<_> = futures::future::join_all(handles).await;
   for result in results.iter() {
-    assert!(result.is_ok(), "Write failed: {:?}", result);
+    assert!(result.is_ok(), "Write failed: {result:?}");
   }
 
   // Verify all data was written
@@ -153,7 +153,7 @@ async fn test_concurrent_graph_writes() {
             "CREATE (:ConcurrentNode {id: $id, name: $name})".to_string(),
             vec![
               ("id", kuzu::Value::Int64(i)),
-              ("name", kuzu::Value::String(format!("Node{}", i))),
+              ("name", kuzu::Value::String(format!("Node{i}"))),
             ],
           )],
         )
@@ -165,7 +165,7 @@ async fn test_concurrent_graph_writes() {
   // All writes should succeed (KuzuDB serializes them)
   let results: Vec<_> = futures::future::join_all(handles).await;
   for result in results.iter() {
-    assert!(result.is_ok(), "Write task failed: {:?}", result);
+    assert!(result.is_ok(), "Write task failed: {result:?}");
     assert!(
       result.as_ref().unwrap().is_ok(),
       "Write inner failed: {:?}",
@@ -240,7 +240,7 @@ async fn test_concurrent_2pc_operations() {
                 schema,
                 vec![
                   Arc::new(StringArray::from(vec![entity_id.to_string()])) as arrow_array::ArrayRef,
-                  Arc::new(StringArray::from(vec![format!("Entity{}", i)]))
+                  Arc::new(StringArray::from(vec![format!("Entity{i}")]))
                     as arrow_array::ArrayRef,
                   Arc::new(Int64Array::from(vec![i])) as arrow_array::ArrayRef,
                 ],
@@ -255,7 +255,7 @@ async fn test_concurrent_2pc_operations() {
             "CREATE (:Entity2PC {id: $id, name: $name, value: $value})".to_string(),
             vec![
               ("id", kuzu::Value::UUID(entity_id)),
-              ("name", kuzu::Value::String(format!("Entity{}", i))),
+              ("name", kuzu::Value::String(format!("Entity{i}"))),
               ("value", kuzu::Value::Int64(i)),
             ],
           )],

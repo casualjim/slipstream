@@ -158,7 +158,7 @@ async fn test_2pc_episode_pattern() {
     .expect("2PC operation should succeed");
 
   // Verify both sides have the data
-  let meta_filter = format!("uuid = '{}'", test_uuid);
+  let meta_filter = format!("uuid = '{test_uuid}'");
   let meta_stream = db
     .meta
     .query_table(&PrimaryStoreQuery {
@@ -213,7 +213,8 @@ async fn test_2pc_episode_pattern() {
   assert_eq!(uuids.len(), 1);
   assert_eq!(uuids[0], test_uuid);
 
-  let uuid_filter = format!("uuid IN ('{}')", uuids[0]);
+  let u0 = uuids[0];
+  let uuid_filter = format!("uuid IN ('{u0}')");
   let uuid_stream = db
     .meta
     .query_table(&PrimaryStoreQuery {

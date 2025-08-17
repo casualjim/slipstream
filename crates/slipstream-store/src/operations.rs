@@ -6,6 +6,18 @@ use arrow_array::RecordBatch;
 use futures::Stream;
 use std::sync::Arc;
 
+// Type aliases to reduce type complexity in enum variants
+pub type GraphValuesStream = Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send>>;
+pub type StoreBatchStream = Pin<Box<dyn Stream<Item = Result<RecordBatch>> + Send>>;
+pub type QueryBuilderFn = Box<
+  dyn FnOnce(
+      Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send + Unpin>,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<PrimaryStoreQuery>> + Send>>
+    + Send,
+>;
+pub type IndexThenStoreTransformer<T> =
+  Box<dyn FnOnce(GraphValuesStream, StoreBatchStream) -> T + Send>;
+
 /// A dummy type that implements ToDatabase with unit contexts
 /// This allows us to have a default for the D parameter
 pub struct NoData;
@@ -14,11 +26,11 @@ impl ToDatabase for NoData {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     unreachable!("NoData should never be used")
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
     unreachable!("NoData should never be used")
   }
 
@@ -49,10 +61,7 @@ pub enum DatabaseOperation<T, D: ToDatabase = NoData> {
   /// Run migrations on both databases
   Migration {
     graph_ddl: Vec<&'static str>,
-    meta_setup: Box<
-      dyn for<'b> FnOnce(&'b lancedb::Connection) -> futures::future::BoxFuture<'b, Result<()>>
-        + Send,
-    >,
+    meta_setup: crate::meta::SetupFn,
     transformer: Box<dyn FnOnce(()) -> T + Send>,
   },
 
@@ -115,20 +124,8 @@ pub enum QueryOperation<T> {
   /// The transformer receives both the graph results and the store results
   IndexThenStore {
     index: GraphIndexQuery,
-    query_builder: Box<
-      dyn FnOnce(
-          Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send + Unpin>,
-        ) -> std::pin::Pin<
-          Box<dyn std::future::Future<Output = Result<PrimaryStoreQuery>> + Send>,
-        > + Send,
-    >,
-    transformer: Box<
-      dyn FnOnce(
-          Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send>>, // graph results
-          Pin<Box<dyn Stream<Item = Result<RecordBatch>> + Send>>,      // store results
-        ) -> T
-        + Send,
-    >,
+    query_builder: QueryBuilderFn,
+    transformer: IndexThenStoreTransformer<T>,
   },
 }
 

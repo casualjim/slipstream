@@ -1,4 +1,3 @@
-
 use crate::streams::ResultStream;
 use crate::{Database, DatabaseCommand, DatabaseOperation, ToDatabase};
 use crate::{Result, config::Config};
@@ -21,7 +20,7 @@ impl ToDatabase for InvariantTestItem {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     Ok(vec![
       ("id", kuzu::Value::UUID(self.id)),
       ("name", kuzu::Value::String(self.name.clone())),
@@ -29,7 +28,7 @@ impl ToDatabase for InvariantTestItem {
     ])
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
     let schema = Arc::new(ArrowSchema::new(vec![
       Field::new("id", DataType::Utf8, false),
       Field::new("name", DataType::Utf8, false),
@@ -332,7 +331,7 @@ async fn test_large_transaction_handling() {
         .map(|i| {
           Arc::new(InvariantTestItem {
             id: Uuid::now_v7(),
-            name: format!("Large Item {}", i),
+            name: format!("Large Item {i}"),
             value: i as u64,
           })
         })
@@ -446,7 +445,7 @@ async fn test_unicode_and_special_characters() {
 
     db.execute(SaveInvariantItem { item: item.clone() })
       .await
-      .expect(&format!("Failed to save item with name: {}", name));
+      .unwrap_or_else(|_| panic!("Failed to save item with name: {name}"));
   }
 
   // Query back and verify
@@ -535,7 +534,7 @@ async fn test_ordered_stream_memory_bounds() {
   let items = stream::iter(
     (0..num_keys)
       .step_by(10)
-      .map(|i| Ok((i, format!("Item {}", i)))),
+      .map(|i| Ok((i, format!("Item {i}")))),
   );
 
   let mut ordered = OrderedStream::new(key_stream, Box::pin(items));
@@ -546,7 +545,8 @@ async fn test_ordered_stream_memory_bounds() {
     if let Ok(item) = result {
       count += 1;
       // Verify the item is what we expect
-      let expected = format!("Item {}", (count - 1) * 10);
+      let idx = (count - 1) * 10;
+      let expected = format!("Item {idx}");
       assert_eq!(item, expected);
     }
   }

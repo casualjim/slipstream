@@ -101,7 +101,7 @@ async fn test_high_load_mixed_operations() {
         }
         _ => {
           // Meta read
-          let filter = format!("id < {}", i);
+          let filter = format!("id < {i}");
           let stream = actor_clone
             .meta
             .query_table(&crate::PrimaryStoreQuery {
@@ -126,10 +126,8 @@ async fn test_high_load_mixed_operations() {
 
   // Count successes by type
   let mut success_counts = std::collections::HashMap::new();
-  for result in results {
-    if let Ok(Ok(op_type)) = result {
-      *success_counts.entry(op_type).or_insert(0) += 1;
-    }
+  for op_type in results.into_iter().flatten().flatten() {
+    *success_counts.entry(op_type).or_insert(0) += 1;
   }
 
   // All operations should succeed

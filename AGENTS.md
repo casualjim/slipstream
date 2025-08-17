@@ -1,8 +1,25 @@
+---
+applyTo: '**'
+description: "hard constraints to follow"
+---
+
 # Repository Guidelines
+
+## Hard Constraints
+- No blocking calls in async code.
+- Follow Rust's ownership and borrowing rules strictly.
+- No unwraps or expects in public APIs.
+- All errors must be handled and propagated properly.
+- Give fact based answers WITH references.
+- Only write clarifying comments about how the code functions.
+- No Makefiles (use mise for tasks)
+- No `any`, `unknown`, or untyped code
+- FACT BASED means, if you use the word "might", you are doing the wrong thing and need more research use the tools: websearch, context7 and fetch
+- Always use the `mise` command for building, deploying, or rendering manifests in this repository.
 
 ## Project Structure & Module Organization
 - `crates/`: Rust workspace (core, ai, memory, store, server, metadata). Tests live alongside crates and in `crates/<name>/tests/`.
-- `workers/`: Cloudflare Workers. `agent-registry-api` (Hono + D1) and `registry`.
+- `workers/`: Restate Workers. 
 - `docs/`: Plans and implementation notes for the agent registry.
 - Key configs: `.mise.toml`, `workers/agent-registry-api/wrangler.jsonc`, `.dev.vars` (example envs only).
 
@@ -26,6 +43,7 @@
 - TypeScript: strict mode, no `any`; D1 queries should prefer `.all<Type>()`. Package manager: Bun.
 - Naming: snake_case (Rust), camelCase (TS).
 - Lint/format: `mise run lint`, `mise run format`.
+- RESPECT indentation
 
 ## Testing Guidelines
 - Rust: nextest via `mise run test:rust`. Integration tests in `crates/<crate>/tests/`. Example: `cargo test --package slipstream-memory --test integration_test`.
@@ -38,5 +56,4 @@
 - Keep changes focused; avoid unrelated refactors.
 
 ## Security & Configuration Tips
-- Never commit real secrets. Use `.dev.vars` for examples.
-- Verify Wrangler/D1 bindings in `workers/agent-registry-api/wrangler.jsonc` when running tests and dev.
+- Never commit real secrets. Use `.env.example` for examples.

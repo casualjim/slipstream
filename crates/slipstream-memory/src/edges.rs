@@ -33,7 +33,7 @@ impl ToDatabase for Mentions {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     use time::OffsetDateTime;
 
     Ok(vec![
@@ -55,7 +55,7 @@ impl ToDatabase for Mentions {
     ])
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
     let uuid_array = StringArray::from(vec![self.uuid.to_string()]);
     let source_array = StringArray::from(vec![self.source_interaction_uuid.to_string()]);
     let target_array = StringArray::from(vec![self.target_concept_uuid.to_string()]);
@@ -208,7 +208,7 @@ impl ToDatabase for Relates {
   type MetaContext = i32; // embedding dimensions
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     use time::OffsetDateTime;
 
     // Only include properties that are in the KuzuDB covering index
@@ -278,7 +278,7 @@ impl ToDatabase for Relates {
     Ok(values)
   }
 
-  fn into_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
     use arrow_array::ListArray;
 
     let embedding_dimensions = ctx;
@@ -608,7 +608,7 @@ impl ToDatabase for Includes {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     use time::OffsetDateTime;
 
     Ok(vec![
@@ -627,7 +627,7 @@ impl ToDatabase for Includes {
     ])
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
     let uuid_array = StringArray::from(vec![self.uuid.to_string()]);
     let source_array = StringArray::from(vec![self.source_theme_uuid.to_string()]);
     let target_array = StringArray::from(vec![self.target_concept_uuid.to_string()]);
@@ -772,12 +772,12 @@ mod tests {
     };
 
     // Test graph conversion
-    let graph_values = mentions.into_graph_value(()).unwrap();
+    let graph_values = mentions.as_graph_value(()).unwrap();
     assert_eq!(graph_values.len(), 5);
     assert_eq!(graph_values[0].0, "uuid");
 
     // Test meta conversion
-    let batch = mentions.into_meta_value(()).unwrap();
+    let batch = mentions.as_meta_value(()).unwrap();
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 5);
   }
@@ -804,11 +804,11 @@ mod tests {
     };
 
     // Test graph conversion
-    let graph_values = relates.into_graph_value(()).unwrap();
+    let graph_values = relates.as_graph_value(()).unwrap();
     assert_eq!(graph_values.len(), 8); // Only covering index properties
 
     // Test meta conversion with embedding dimensions
-    let batch = relates.into_meta_value(384).unwrap();
+    let batch = relates.as_meta_value(384).unwrap();
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 13);
   }
@@ -824,11 +824,11 @@ mod tests {
     };
 
     // Test graph conversion
-    let graph_values = includes.into_graph_value(()).unwrap();
+    let graph_values = includes.as_graph_value(()).unwrap();
     assert_eq!(graph_values.len(), 5);
 
     // Test meta conversion
-    let batch = includes.into_meta_value(()).unwrap();
+    let batch = includes.as_meta_value(()).unwrap();
     assert_eq!(batch.num_rows(), 1);
     assert_eq!(batch.num_columns(), 5);
   }
@@ -859,7 +859,7 @@ mod tests {
     };
 
     // Should handle None values properly
-    let batch = relates.into_meta_value(384).unwrap();
+    let batch = relates.as_meta_value(384).unwrap();
     assert_eq!(batch.num_rows(), 1);
   }
 }

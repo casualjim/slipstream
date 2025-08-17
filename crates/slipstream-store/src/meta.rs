@@ -7,8 +7,14 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 use super::create_embedding_function_from_config;
+
+// Simplify closure type used for setup functions
+pub type SetupFn = Box<
+  dyn for<'a> FnOnce(&'a lancedb::Connection) -> futures::future::BoxFuture<'a, Result<()>> + Send,
+>;
 
 /// MetaDb provides an async interface to LanceDB
 ///
@@ -19,6 +25,7 @@ pub struct MetaDb {
   pub(super) path: std::path::PathBuf,
   // Internal background cleanup task
   cleanup_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+  cancel_token: CancellationToken,
 }
 
 // We need to implement Clone manually because JoinHandle doesn't implement Clone
@@ -28,6 +35,7 @@ impl Clone for MetaDb {
       conn: self.conn.clone(),
       path: self.path.clone(),
       cleanup_task: Arc::clone(&self.cleanup_task),
+      cancel_token: self.cancel_token.clone(),
     }
   }
 }
@@ -64,6 +72,7 @@ impl MetaDb {
       conn,
       path: data_dir,
       cleanup_task: Arc::new(Mutex::new(None)),
+      cancel_token: CancellationToken::new(),
     };
 
     // Start the background cleanup task
@@ -72,29 +81,9 @@ impl MetaDb {
     Ok(db)
   }
 
-  #[cfg(test)]
-  pub(super) async fn create_empty_table(
-    &self,
-    table_name: &str,
-    schema: &arrow::datatypes::SchemaRef,
-  ) -> Result<()> {
-    self
-      .conn
-      .create_empty_table(table_name, schema.clone())
-      .execute()
-      .await?;
-    Ok(())
-  }
-
   /// Execute a setup function that needs access to the underlying connection
   /// This is used for migrations and other setup operations
-  pub async fn execute_setup(
-    &self,
-    f: Box<
-      dyn for<'a> FnOnce(&'a lancedb::Connection) -> futures::future::BoxFuture<'a, Result<()>>
-        + Send,
-    >,
-  ) -> Result<()> {
+  pub async fn execute_setup(&self, f: SetupFn) -> Result<()> {
     f(&self.conn).await
   }
 
@@ -237,6 +226,7 @@ impl MetaDb {
   /// This runs periodically to optimize LanceDB tables (compaction, pruning, etc.)
   async fn start_cleanup_task(&self) {
     let conn = self.conn.clone();
+    let cancel = self.cancel_token.clone();
 
     // Spawn the optimization task
     let handle = tokio::spawn(async move {
@@ -245,7 +235,13 @@ impl MetaDb {
         let mut rng = StdRng::from_os_rng();
         let wait_minutes = rng.random_range(50..=70);
         let wait_duration = Duration::from_secs(wait_minutes * 60);
-        tokio::time::sleep(wait_duration).await;
+        tokio::select! {
+          _ = tokio::time::sleep(wait_duration) => {},
+          _ = cancel.cancelled() => {
+            tracing::info!("LanceDB optimization task cancelled");
+            break;
+          }
+        }
 
         tracing::info!("Running LanceDB optimization task");
 
@@ -313,7 +309,9 @@ impl Drop for MetaDb {
     // Cancel the cleanup task if this is the last reference
     if Arc::strong_count(&self.cleanup_task) == 1 {
       let cleanup_task = Arc::clone(&self.cleanup_task);
+      let cancel = self.cancel_token.clone();
       tokio::spawn(async move {
+        cancel.cancel();
         let mut guard = cleanup_task.lock().await;
         if let Some(handle) = guard.take() {
           handle.abort();
@@ -1052,7 +1050,7 @@ mod tests {
     assert_eq!(total_rows, 0, "Table should be empty");
 
     // Now MergeInsert on the empty table should work
-    let (_, version) = db
+    let (_, _version) = db
       .save_to_table("merge_test_empty", data.clone(), &["uuid"])
       .await
       .expect("MergeInsert should work on empty table");
@@ -1126,7 +1124,7 @@ mod tests {
     )
     .expect("Failed to create second episode batch");
 
-    let (_, version2) = db
+    let (_, _version2) = db
       .save_to_table("episodes_test", episode_data2.clone(), &["uuid"])
       .await
       .expect("MergeInsert should work on non-empty table");
@@ -1189,7 +1187,7 @@ mod tests {
 
         match index_result {
           Ok(_) => {}
-          Err(e) => {}
+          Err(_e) => {}
         }
 
         Ok(())
@@ -1248,7 +1246,7 @@ mod tests {
 
         match index_result {
           Ok(_) => {}
-          Err(e) => {}
+          Err(_e) => {}
         }
 
         // Remove the dummy row

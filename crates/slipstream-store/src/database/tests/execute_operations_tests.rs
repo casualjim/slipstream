@@ -8,7 +8,7 @@ use crate::{
 };
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow_array::{Int64Array, RecordBatch, StringArray};
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 
 /// Test command that implements Skip operation
 struct TestSkipCommand {
@@ -22,7 +22,7 @@ impl DatabaseCommand for TestSkipCommand {
   fn to_operation(&self) -> DatabaseOperation<Self::Output, Self::SaveData> {
     let value = self.value;
     DatabaseOperation::Skip {
-      transformer: Box::new(move |_| format!("skipped_{}", value)),
+      transformer: Box::new(move |_| format!("skipped_{value}")),
     }
   }
 }
@@ -267,15 +267,16 @@ impl DatabaseCommand for TestIndexOnlyCommand {
             // Extract id and name from Vec<kuzu::Value>
             if row.len() >= 2 {
                 if let (kuzu::Value::Int64(id), kuzu::Value::String(name)) = (&row[0], &row[1]) {
-                  yield (*id as i64, name.clone());
+                  yield (*id, name.clone());
                 } else {
                 Err(crate::Error::InvalidGraphDbData(
-                  format!("Expected (Int64, String), got {:?}", row)
+                  format!("Expected (Int64, String), got {row:?}")
                 ))?;
               }
             } else {
+              let len = row.len();
               Err(crate::Error::InvalidGraphDbData(
-                format!("Expected 2 values, got {}", row.len())
+                format!("Expected 2 values, got {len}")
               ))?;
             }
           }
@@ -357,7 +358,7 @@ async fn test_execute_index_only_with_params() {
         "CREATE (:IndexOnlyTest {id: $id, name: $name})",
         vec![
           ("id", kuzu::Value::Int64(i)),
-          ("name", kuzu::Value::String(format!("test{}", i))),
+          ("name", kuzu::Value::String(format!("test{i}"))),
         ],
       )
       .await
@@ -407,8 +408,9 @@ impl DatabaseCommand for TestIndexOnlyUuidCommand {
               if let kuzu::Value::UUID(uuid) = &row[0] {
                 yield *uuid;
               } else {
+                let v = &row[0];
                 Err(crate::Error::InvalidGraphDbData(
-                  format!("Expected UUID, got {:?}", row[0])
+                  format!("Expected UUID, got {v:?}")
                 ))?;
               }
             }
@@ -493,7 +495,7 @@ impl crate::ToDatabase for TestSaveData {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(
+  fn as_graph_value(
     &self,
     _ctx: Self::GraphContext,
   ) -> crate::Result<Vec<(&'static str, kuzu::Value)>> {
@@ -504,7 +506,7 @@ impl crate::ToDatabase for TestSaveData {
     ])
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> crate::Result<arrow_array::RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> crate::Result<arrow_array::RecordBatch> {
     let schema = std::sync::Arc::new(ArrowSchema::new(vec![
       Field::new("id", DataType::Utf8, false),
       Field::new("name", DataType::Utf8, false),
@@ -556,7 +558,7 @@ impl DatabaseCommand for TestSaveCommand {
       "save_test",
       std::sync::Arc::new(self.data.clone()),
       "CREATE (:SaveTest {id: $id, name: $name, value: $value})",
-      Box::new(move |_| format!("saved_{}", id)),
+      Box::new(move |_| format!("saved_{id}")),
     )
   }
 }
@@ -596,7 +598,7 @@ async fn test_execute_save_operation() {
     })
     .await
     .expect("save should work");
-  assert_eq!(out1, format!("saved_{}", id1));
+  assert_eq!(out1, format!("saved_{id1}"));
 
   let id2 = uuid::Uuid::now_v7();
   let out2 = db
@@ -609,7 +611,7 @@ async fn test_execute_save_operation() {
     })
     .await
     .expect("second save should work");
-  assert_eq!(out2, format!("saved_{}", id2));
+  assert_eq!(out2, format!("saved_{id2}"));
 
   // Verify meta rows
   let mut count_stream = db
@@ -803,15 +805,15 @@ async fn test_execute_concurrent_operations() {
       if i % 2 == 0 {
         dbc.execute(TestSkipCommand { value: i }).await
       } else {
-        Ok(format!("operation_{}", i))
+        Ok(format!("operation_{i}"))
       }
     }));
   }
 
   let results: Vec<_> = futures::future::join_all(handles).await;
   for (i, r) in results.iter().enumerate() {
-    assert!(r.is_ok(), "task {} should succeed", i);
-    assert!(r.as_ref().unwrap().is_ok(), "inner {} ok", i);
+    assert!(r.is_ok(), "task {i} should succeed");
+    assert!(r.as_ref().unwrap().is_ok(), "inner {i} ok");
   }
 }
 
@@ -864,7 +866,7 @@ async fn test_execute_error_propagation() {
             }
             Ok(PrimaryStoreQuery {
               table: "any_table",
-              filter: Some(format!("uuid IN ({})", in_clause)),
+              filter: Some(format!("uuid IN ({in_clause})")),
               limit: None,
               offset: None,
               vector_search: None,
@@ -946,7 +948,7 @@ async fn test_save_with_parameter_mismatch() {
         Field::new("name", DataType::Utf8, false),
       ]))
     }
-    fn into_graph_value(
+    fn as_graph_value(
       &self,
       _ctx: Self::GraphContext,
     ) -> crate::Result<Vec<(&'static str, kuzu::Value)>> {
@@ -956,7 +958,7 @@ async fn test_save_with_parameter_mismatch() {
         ("extra_field", kuzu::Value::String(self.extra_field.clone())),
       ])
     }
-    fn into_meta_value(&self, _ctx: Self::MetaContext) -> crate::Result<arrow_array::RecordBatch> {
+    fn as_meta_value(&self, _ctx: Self::MetaContext) -> crate::Result<arrow_array::RecordBatch> {
       let schema = std::sync::Arc::new(ArrowSchema::new(vec![
         Field::new("id", DataType::Utf8, false),
         Field::new("name", DataType::Utf8, false),

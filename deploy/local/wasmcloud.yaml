@@ -10,7 +10,7 @@ services:
       WASMCLOUD_OCI_ALLOWED_INSECURE: registry:5000
       WASMCLOUD_OBSERVABILITY_ENABLED: "false"
     ports:
-      - "8000-8100:8000-8100" # Expose ports 8000-8100 for examples that use an HTTP server
+      - "127.0.0.1:8000-8100:8000-8100" # Expose ports 8000-8100 for examples that use an HTTP server
 
   wadm:
     depends_on:

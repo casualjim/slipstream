@@ -132,11 +132,11 @@ pub trait ToDatabase: Send + Sync {
 
   /// Convert to parameter name-value pairs for KuzuDB graph storage.
   /// Returns parameter names and values for use in Cypher queries.
-  fn into_graph_value(&self, ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>>;
+  fn as_graph_value(&self, ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>>;
 
   /// Convert to RecordBatch for LanceDB storage.
   /// Must include all data (this is the source of truth).
-  fn into_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch>;
+  fn as_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch>;
 
   /// Return the primary key columns for this type.
   /// These columns are used for merge/upsert operations in LanceDB.

@@ -49,10 +49,7 @@ impl GraphDb {
         conn.query(&query)?;
       } else {
         let mut prepared = conn.prepare(&query)?;
-        let params: Vec<(&str, Value)> = params
-          .iter()
-          .map(|(k, v)| (k.as_ref(), v.clone()))
-          .collect();
+        let params: Vec<(&str, Value)> = params.iter().map(|(k, v)| (*k, v.clone())).collect();
         conn.execute(&mut prepared, params)?;
       };
 
@@ -83,19 +80,16 @@ impl GraphDb {
         let db_guard = db.read();
         let conn = Connection::new(&db_guard)?;
 
-        let mut query_result = if params.is_empty() {
+        let query_result = if params.is_empty() {
           conn.query(&query)?
         } else {
           let mut prepared = conn.prepare(&query)?;
-          let params: Vec<(&str, Value)> = params
-            .iter()
-            .map(|(k, v)| (k.as_ref(), v.clone()))
-            .collect();
+          let params: Vec<(&str, Value)> = params.iter().map(|(k, v)| (*k, v.clone())).collect();
           conn.execute(&mut prepared, params)?
         };
 
         // Stream results one by one
-        while let Some(row) = query_result.next() {
+        for row in query_result {
           if sender.send(Ok(row)).is_err() {
             // Receiver dropped
             break;
@@ -220,7 +214,7 @@ mod tests {
     // Insert multiple test nodes
     for i in 1..=10 {
       db.execute_write(
-        &format!("CREATE (:TestNode {{id: {}, name: 'Node{}' }})", i, i),
+        &format!("CREATE (:TestNode {{id: {i}, name: 'Node{i}' }})"),
         vec![],
       )
       .await
@@ -235,7 +229,7 @@ mod tests {
       let handle = tokio::spawn(async move {
         let receiver = db_clone
           .execute_query(
-            &format!("MATCH (n:TestNode) WHERE n.id = {} RETURN n.name", i),
+            &format!("MATCH (n:TestNode) WHERE n.id = {i} RETURN n.name"),
             vec![],
           )
           .await?;
@@ -269,7 +263,7 @@ mod tests {
     // Perform sequential writes
     for i in 1..=5 {
       db.execute_write(
-        &format!("CREATE (:TestNode {{id: {}, name: 'Node{}' }})", i, i),
+        &format!("CREATE (:TestNode {{id: {i}, name: 'Node{i}' }})"),
         vec![],
       )
       .await
@@ -325,10 +319,7 @@ mod tests {
       let handle = tokio::spawn(async move {
         db_clone
           .execute_write(
-            &format!(
-              "CREATE (:TestNode {{id: {}, name: 'ConcurrentNode{}' }})",
-              i, i
-            ),
+            &format!("CREATE (:TestNode {{id: {i}, name: 'ConcurrentNode{i}' }})"),
             vec![],
           )
           .await
@@ -381,7 +372,7 @@ mod tests {
     // Create initial data
     for i in 1..=10 {
       db.execute_write(
-        &format!("CREATE (:TestNode {{id: {}, name: 'LoadNode{}' }})", i, i),
+        &format!("CREATE (:TestNode {{id: {i}, name: 'LoadNode{i}' }})"),
         vec![],
       )
       .await
@@ -473,7 +464,7 @@ mod tests {
     // Insert test data
     for i in 1..=5 {
       db.execute_write(
-        &format!("CREATE (:TestNode {{id: {}, name: 'Node{}' }})", i, i),
+        &format!("CREATE (:TestNode {{id: {i}, name: 'Node{i}' }})"),
         vec![],
       )
       .await
@@ -585,24 +576,24 @@ mod tests {
     match receiver {
       Ok(receiver) => {
         let mut result = UnboundedReceiverStream::new(receiver);
-        let mut count = 0;
+        let mut list_contains_count = 0;
         while let Some(row_result) = result.next().await {
           match row_result {
-            Ok(_row) => count += 1,
-            Err(e) => {
+            Ok(_row) => list_contains_count += 1,
+            Err(_e) => {
               break;
             }
           }
         }
 
-        if count > 0 {
+        if list_contains_count > 0 {
           assert_eq!(
-            count, 2,
+            list_contains_count, 2,
             "list_contains should find 2 episodes with group-a"
           );
         }
       }
-      Err(e) => {
+      Err(_e) => {
 
         // This is fine - it means Kuzu doesn't support list_contains
         // We need to use IN clause instead
@@ -763,17 +754,17 @@ mod tests {
     match receiver {
       Ok(receiver) => {
         let mut result = UnboundedReceiverStream::new(receiver);
-        let mut count = 0;
+        let mut _count = 0;
         while let Some(row_result) = result.next().await {
           match row_result {
-            Ok(_row) => count += 1,
-            Err(e) => {
+            Ok(_row) => _count += 1,
+            Err(_e) => {
               break;
             }
           }
         }
       }
-      Err(e) => {
+      Err(_e) => {
 
         // This might be the issue - let's try alternative syntax
       }
@@ -791,17 +782,17 @@ mod tests {
     match receiver {
       Ok(receiver) => {
         let mut result = UnboundedReceiverStream::new(receiver);
-        let mut count = 0;
+        let mut _count = 0;
         while let Some(row_result) = result.next().await {
           match row_result {
-            Ok(_row) => count += 1,
-            Err(e) => {
+            Ok(_row) => _count += 1,
+            Err(_e) => {
               break;
             }
           }
         }
       }
-      Err(e) => {}
+      Err(_e) => {}
     }
   }
 
@@ -829,7 +820,7 @@ mod tests {
         "CREATE (:Episode {uuid: $uuid, name: $name})",
         vec![
           ("uuid", Value::UUID(uuid)),
-          ("name", Value::String(format!("Episode {}", i))),
+          ("name", Value::String(format!("Episode {i}"))),
         ],
       )
       .await
@@ -852,7 +843,7 @@ mod tests {
       let row = row_result.expect("Row should be Ok");
       if let Value::UUID(uuid) = &row[0] {
         returned_uuids.push(*uuid);
-        if let Value::String(name) = &row[1] {}
+        if let Value::String(_name) = &row[1] {}
       }
     }
 
@@ -928,10 +919,9 @@ mod tests {
     let group_ids_list = "'group-a'";
     let cypher = format!(
       "MATCH (n:Episode)
-       WHERE list_contains([{}], n.group_id)
+       WHERE list_contains([{group_ids_list}], n.group_id)
        RETURN n.uuid
-       ORDER BY n.uuid DESC",
-      group_ids_list
+       ORDER BY n.uuid DESC"
     );
 
     let receiver = db
@@ -1025,7 +1015,7 @@ mod tests {
     while let Some(row_result) = result.next().await {
       let row = row_result.expect("Row should be Ok");
       count += 1;
-      if let Value::UUID(uuid) = &row[0] {}
+      if let Value::UUID(_uuid) = &row[0] {}
     }
 
     // Should find 2 episodes (the ones from 1 and 2 hours ago)

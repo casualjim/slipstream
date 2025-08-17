@@ -6,7 +6,6 @@ use crate::Result;
 use crate::ResultStream;
 use arrow_array::RecordBatch;
 use futures::{Stream, StreamExt};
-use std::pin::Pin;
 
 /// Common transformer utilities
 pub mod common {
@@ -21,7 +20,7 @@ pub mod common {
 
   /// Creates a transformer that returns unit directly (not as a stream)
   /// Useful for mutation operations that don't need streaming results
-  pub fn unit_result() -> impl FnOnce(()) -> () {
+  pub fn unit_result() -> impl FnOnce(()) {
     |_| ()
   }
 
@@ -38,9 +37,8 @@ pub mod common {
     move |_| Box::pin(futures::stream::once(async move { Ok(value) }))
   }
 
-  /// Creates a transformer that counts items in a stream
   pub fn count_transformer<T: Send + 'static>()
-  -> impl FnOnce(Pin<Box<dyn Stream<Item = Result<T>> + Send>>) -> ResultStream<usize> {
+  -> impl FnOnce(ResultStream<T>) -> ResultStream<usize> {
     |stream| {
       Box::pin(async_stream::try_stream! {
           let mut count = 0;
@@ -56,7 +54,7 @@ pub mod common {
 
   /// Creates a transformer that collects stream items into a vector
   pub fn collect_transformer<T: Send + 'static>()
-  -> impl FnOnce(Pin<Box<dyn Stream<Item = Result<T>> + Send>>) -> ResultStream<Vec<T>> {
+  -> impl FnOnce(ResultStream<T>) -> ResultStream<Vec<T>> {
     |stream| {
       Box::pin(async_stream::try_stream! {
           let mut items = Vec::new();
@@ -79,13 +77,14 @@ pub mod ordered {
   /// Creates a transformer for ordered streams where items need to be emitted in a specific order
   pub fn ordered_stream_transformer<K, V>(
     key_stream: impl Stream<Item = K> + Send + 'static,
-  ) -> impl FnOnce(Pin<Box<dyn Stream<Item = Result<(K, V)>> + Send + Unpin>>) -> ResultStream<V>
+  ) -> impl FnOnce(ResultStream<(K, V)>) -> ResultStream<V>
   where
     K: Eq + Hash + Clone + Send + std::fmt::Debug + 'static,
     V: Send + 'static,
   {
-    move |items_stream| {
-      let ordered = OrderedStream::new(Box::pin(key_stream), items_stream);
+    move |items_stream: ResultStream<(K, V)>| {
+      // OrderedStream requires Unpin streams; our ResultStream is a pinned box already and satisfies this in practice
+      let ordered = OrderedStream::new(key_stream, items_stream);
       Box::pin(ordered)
     }
   }
@@ -94,8 +93,7 @@ pub mod ordered {
   /// This is a common pattern for entity queries
   pub fn uuid_ordered_transformer<T: Send + 'static>(
     uuid_stream: impl Stream<Item = uuid::Uuid> + Send + 'static,
-  ) -> impl FnOnce(Pin<Box<dyn Stream<Item = Result<(uuid::Uuid, T)>> + Send + Unpin>>) -> ResultStream<T>
-  {
+  ) -> impl FnOnce(ResultStream<(uuid::Uuid, T)>) -> ResultStream<T> {
     ordered_stream_transformer(uuid_stream)
   }
 }
@@ -125,7 +123,7 @@ pub mod record_batch {
   pub fn to_keyed_stream<K, V>(
     key_extractor: impl Fn(&arrow_array::RecordBatch, usize) -> Result<K> + Send + 'static,
     value_extractor: impl Fn(&arrow_array::RecordBatch, usize) -> Result<V> + Send + 'static,
-  ) -> impl FnOnce(ResultStream<RecordBatch>) -> Pin<Box<dyn Stream<Item = Result<(K, V)>> + Send>>
+  ) -> impl FnOnce(ResultStream<RecordBatch>) -> ResultStream<(K, V)>
   where
     K: Send + 'static,
     V: Send + 'static,
@@ -231,12 +229,11 @@ pub mod record_batch {
 /// Graph stream transformers for working with Kuzu query results
 pub mod graph_stream {
   use super::*;
+  use crate::streams::{GraphValuesStream, ResultFuture};
 
   /// Extracts UUIDs from a graph query result stream
-  pub fn extract_uuids() -> impl FnOnce(
-    Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send>>,
-  ) -> Pin<Box<dyn Stream<Item = Result<uuid::Uuid>> + Send>> {
-    |graph_stream| {
+  pub fn extract_uuids() -> impl FnOnce(GraphValuesStream) -> ResultStream<uuid::Uuid> {
+    |graph_stream: GraphValuesStream| {
       Box::pin(async_stream::try_stream! {
           let mut graph_stream = std::pin::pin!(graph_stream);
           while let Some(row_result) = graph_stream.next().await {
@@ -254,12 +251,8 @@ pub mod graph_stream {
   }
 
   /// Collects UUIDs from a graph stream into a vector
-  pub fn collect_uuids() -> impl FnOnce(
-    Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send>>,
-  ) -> Pin<
-    Box<dyn futures::Future<Output = Result<Vec<uuid::Uuid>>> + Send>,
-  > {
-    |graph_stream| {
+  pub fn collect_uuids() -> impl FnOnce(GraphValuesStream) -> ResultFuture<Vec<uuid::Uuid>> {
+    |graph_stream: GraphValuesStream| {
       Box::pin(async move {
         let mut uuids = Vec::new();
         let mut graph_stream = std::pin::pin!(graph_stream);
@@ -281,10 +274,8 @@ pub mod graph_stream {
   }
 
   /// Extract string values from first column of graph results
-  pub fn extract_strings() -> impl FnOnce(
-    Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send>>,
-  ) -> Pin<Box<dyn Stream<Item = Result<String>> + Send>> {
-    |graph_stream| {
+  pub fn extract_strings() -> impl FnOnce(GraphValuesStream) -> ResultStream<String> {
+    |graph_stream: GraphValuesStream| {
       Box::pin(async_stream::try_stream! {
           let mut graph_stream = std::pin::pin!(graph_stream);
           while let Some(row_result) = graph_stream.next().await {
@@ -302,10 +293,8 @@ pub mod graph_stream {
   }
 
   /// Extract a single count (Int64) from graph results
-  pub fn extract_count() -> impl FnOnce(
-    Pin<Box<dyn Stream<Item = Result<Vec<kuzu::Value>>> + Send>>,
-  ) -> Pin<Box<dyn Stream<Item = Result<usize>> + Send>> {
-    |graph_stream| {
+  pub fn extract_count() -> impl FnOnce(GraphValuesStream) -> ResultStream<usize> {
+    |graph_stream: GraphValuesStream| {
       Box::pin(async_stream::try_stream! {
           let mut graph_stream = std::pin::pin!(graph_stream);
           if let Some(row_result) = graph_stream.next().await {

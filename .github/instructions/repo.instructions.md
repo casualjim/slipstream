@@ -1,0 +1,1 @@
+/Users/ivan/github/casualjim/slipstream/AGENTS.md

@@ -142,7 +142,7 @@ async fn test_index_then_store_pattern() {
 
             Ok(PrimaryStoreQuery {
               table: "episodes",
-              filter: Some(format!("uuid IN ({})", in_clause)),
+              filter: Some(format!("uuid IN ({in_clause})")),
               limit: None,
               offset: None,
               vector_search: None,
@@ -281,7 +281,7 @@ async fn test_index_then_store_empty_index() {
 
             Ok(PrimaryStoreQuery {
               table: "episodes",
-              filter: Some(format!("uuid IN ({})", in_clause)),
+              filter: Some(format!("uuid IN ({in_clause})")),
               limit: None,
               offset: None,
               vector_search: None,
@@ -401,7 +401,7 @@ async fn test_index_then_store_missing_table() {
 
             Ok(PrimaryStoreQuery {
               table: "episodes",
-              filter: Some(format!("uuid IN ({})", in_clause)),
+              filter: Some(format!("uuid IN ({in_clause})")),
               limit: None,
               offset: None,
               vector_search: None,

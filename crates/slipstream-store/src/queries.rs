@@ -1,7 +1,10 @@
 //! Helper functions for building common query patterns
 
+#[cfg(test)]
 use crate::Result;
+#[cfg(test)]
 use futures::{Stream, StreamExt};
+#[cfg(test)]
 use std::fmt::Display;
 
 /// Builds an IN clause for SQL/LanceDB queries from a stream of values
@@ -14,6 +17,7 @@ use std::fmt::Display;
 /// let in_clause = build_in_clause_from_stream(uuid_stream).await?;
 /// // Returns: "'uuid1', 'uuid2', 'uuid3'"
 /// ```
+#[cfg(test)]
 pub async fn build_in_clause_from_stream<T, S>(mut stream: S) -> Result<(String, usize)>
 where
   T: Display,
@@ -43,6 +47,7 @@ where
 /// let in_clause = build_in_clause_from_iter(&uuids);
 /// // Returns: "'uuid1', 'uuid2', 'uuid3'"
 /// ```
+#[cfg(test)]
 pub fn build_in_clause_from_iter<T, I>(values: I) -> String
 where
   T: Display,
@@ -50,7 +55,7 @@ where
 {
   values
     .into_iter()
-    .map(|v| format!("'{}'", v))
+    .map(|v| format!("'{v}'"))
     .collect::<Vec<_>>()
     .join(", ")
 }
@@ -59,6 +64,7 @@ where
 ///
 /// This is a common pattern when querying the graph index first,
 /// then using the results to query the primary store.
+#[cfg(test)]
 pub async fn extract_uuids_to_in_clause<S>(mut stream: S) -> Result<(String, Vec<uuid::Uuid>)>
 where
   S: Stream<Item = Result<Vec<kuzu::Value>>> + Unpin,
@@ -89,6 +95,7 @@ where
 /// Creates a filter expression that always returns false
 ///
 /// Useful when you need to return an empty result set
+#[cfg(test)]
 pub fn empty_filter() -> String {
   "1 = 0".to_string()
 }

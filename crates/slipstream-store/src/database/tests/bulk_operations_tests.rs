@@ -1,4 +1,3 @@
-
 use crate::streams::ResultStream;
 use crate::{Database, DatabaseCommand, DatabaseOperation, ToDatabase};
 use crate::{Result, config::Config};
@@ -21,7 +20,7 @@ impl ToDatabase for TestItem {
   type MetaContext = ();
   type GraphContext = ();
 
-  fn into_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
+  fn as_graph_value(&self, _ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
     Ok(vec![
       ("id", kuzu::Value::String(self.id.clone())),
       ("name", kuzu::Value::String(self.name.clone())),
@@ -29,7 +28,7 @@ impl ToDatabase for TestItem {
     ])
   }
 
-  fn into_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
+  fn as_meta_value(&self, _ctx: Self::MetaContext) -> Result<RecordBatch> {
     let schema = Arc::new(ArrowSchema::new(vec![
       Field::new("id", DataType::Utf8, false),
       Field::new("name", DataType::Utf8, false),
@@ -223,11 +222,11 @@ impl DatabaseCommand for QueryTestItems {
             while let Some(result) = pinned_stream.next().await {
                 let values = result?;
                 if values.len() == 3 {
-                    if let (
-                        Some(kuzu::Value::String(id)),
-                        Some(kuzu::Value::String(name)),
-                        Some(kuzu::Value::Int64(value)),
-                    ) = (values.get(0), values.get(1), values.get(2))
+          if let (
+            Some(kuzu::Value::String(id)),
+            Some(kuzu::Value::String(name)),
+            Some(kuzu::Value::Int64(value)),
+          ) = (values.first(), values.get(1), values.get(2))
                     {
                         yield (id.clone(), name.clone(), *value);
                     }
@@ -299,8 +298,8 @@ async fn test_bulk_save_create_mode() {
   let items: Vec<Arc<TestItem>> = (0..5)
     .map(|i| {
       Arc::new(TestItem {
-        id: format!("item-{}", i),
-        name: format!("Test Item {}", i),
+        id: format!("item-{i}"),
+        name: format!("Test Item {i}"),
         value: i as u64 * 10,
       })
     })
@@ -413,8 +412,8 @@ async fn test_bulk_save_append_mode() {
   let new_items: Vec<Arc<TestItem>> = (0..3)
     .map(|i| {
       Arc::new(TestItem {
-        id: format!("new-{}", i),
-        name: format!("New Item {}", i),
+        id: format!("new-{i}"),
+        name: format!("New Item {i}"),
         value: i as u64 * 20,
       })
     })
@@ -670,7 +669,7 @@ async fn test_bulk_save_large_batch() {
     .map(|i| {
       Arc::new(TestItem {
         id: Uuid::now_v7().to_string(),
-        name: format!("Large Batch Item {}", i),
+        name: format!("Large Batch Item {i}"),
         value: i as u64,
       })
     })
@@ -749,21 +748,22 @@ async fn test_bulk_save_with_contexts() {
     type GraphContext = GraphContext;
     type MetaContext = MetaContext;
 
-    fn into_graph_value(
-      &self,
-      ctx: Self::GraphContext,
-    ) -> Result<Vec<(&'static str, kuzu::Value)>> {
+    fn as_graph_value(&self, ctx: Self::GraphContext) -> Result<Vec<(&'static str, kuzu::Value)>> {
       Ok(vec![
         (
           "id",
-          kuzu::Value::String(format!("{}-{}", ctx.prefix, self.id)),
+          kuzu::Value::String({
+            let prefix = &ctx.prefix;
+            let id = &self.id;
+            format!("{prefix}-{id}")
+          }),
         ),
         ("category", kuzu::Value::String(self.category.clone())),
         ("score", kuzu::Value::Double(self.score)),
       ])
     }
 
-    fn into_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
+    fn as_meta_value(&self, ctx: Self::MetaContext) -> Result<RecordBatch> {
       let schema = Arc::new(ArrowSchema::new(vec![
         Field::new("id", DataType::Utf8, false),
         Field::new("category", DataType::Utf8, false),

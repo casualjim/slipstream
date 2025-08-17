@@ -2,8 +2,6 @@
 
 use std::sync::Arc;
 
-use tracing_subscriber::prelude::*;
-
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow_array::RecordBatch;
 use futures::StreamExt as _;
@@ -16,7 +14,8 @@ use crate::traits::DatabaseCommand;
 // Initialize pretty test logging and backtraces once per process.
 // Safe to call multiple times in tests due to subscriber init guarding.
 // centralized in crate::tests via ctor in lib.rs
-pub(crate) fn init_logging() { /* no-op; centralized */ }
+pub(crate) fn init_logging() { /* no-op; centralized */
+}
 
 pub(crate) fn test_config(path: &std::path::Path) -> Config {
   Config::new_test(path.to_path_buf())
