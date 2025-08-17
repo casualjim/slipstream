@@ -13,3 +13,5 @@ mcp.json
 .*.vars
 *.log
 .crush
+crush.json
+CRUSH.md
