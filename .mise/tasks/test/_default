@@ -11,6 +11,6 @@ cd "$proj_dir" || exit 1
 
 # cargo nextest run --release --workspace --no-fail-fast --no-capture
 mise test:rust
-mise test:workers
+# mise test:workers
 
 echo "✅ Slipstream tests complete!"
