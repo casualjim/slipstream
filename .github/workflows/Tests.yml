@@ -23,6 +23,18 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Setup Ollama
+        uses: ai-action/setup-ollama@v1
+
+      - name: Pull embedding model
+        run: ollama pull snowflake-arctic-embed:xs
+
+      - name: Run docker compose
+        uses: hoverkraft-tech/compose-action@v2.0.1
+        with:
+          compose-file: "./compose.yml"
+          services: "nats"
+
       - name: Setup mise
         uses: jdx/mise-action@v2
         with:

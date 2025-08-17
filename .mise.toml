@@ -13,4 +13,5 @@ bun = "latest"
 "ubi:j178/prek" = "0.0.23"
 
 [env]
-_.file = ".dev.vars"
+_.file = ".env.local"
+KUZU_SHARED = "1"
