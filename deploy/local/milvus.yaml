@@ -2,6 +2,7 @@ services:
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.18
+    restart: unless-stopped
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
       - ETCD_AUTO_COMPACTION_RETENTION=1000
@@ -18,18 +19,19 @@ services:
 
   minio:
     container_name: milvus-minio
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    image: minio/minio:latest
+    restart: unless-stopped
     environment:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     ports:
-      - "127.0.0.1:9001:9001"
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9081:9081"
+      - "127.0.0.1:9082:9082"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
-    command: minio server /minio_data --console-address ":9001"
+    command: minio server /minio_data --console-address ":9081" --address ":9082"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9082/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -38,11 +40,12 @@ services:
     container_name: milvus-standalone
     image: milvusdb/milvus:v2.6.0
     command: ["milvus", "run", "standalone"]
+    restart: unless-stopped
     security_opt:
     - seccomp:unconfined
     environment:
       ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: minio:9000
+      MINIO_ADDRESS: minio:9082
       MQ_TYPE: woodpecker
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
@@ -59,6 +62,3 @@ services:
       - "etcd"
       - "minio"
 
-networks:
-  default:
-    name: milvus
