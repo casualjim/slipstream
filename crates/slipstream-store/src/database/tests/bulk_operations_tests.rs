@@ -221,15 +221,14 @@ impl DatabaseCommand for QueryTestItems {
             let mut pinned_stream = std::pin::pin!(stream);
             while let Some(result) = pinned_stream.next().await {
                 let values = result?;
-                if values.len() == 3 {
-          if let (
+                if values.len() == 3
+          && let (
             Some(kuzu::Value::String(id)),
             Some(kuzu::Value::String(name)),
             Some(kuzu::Value::Int64(value)),
           ) = (values.first(), values.get(1), values.get(2))
-                    {
-                        yield (id.clone(), name.clone(), *value);
-                    }
+                {
+                    yield (id.clone(), name.clone(), *value);
                 }
             }
         })

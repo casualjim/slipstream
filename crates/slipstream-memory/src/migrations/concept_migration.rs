@@ -52,8 +52,7 @@ impl DatabaseCommand for RunConceptMigration {
                     group_id STRING,
                     created_at TIMESTAMP,
                     PRIMARY KEY (uuid)
-                )"#
-          .into(),
+                )"#,
       ],
 
       meta_setup: Box::new(move |conn| {

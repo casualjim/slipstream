@@ -1,0 +1,13 @@
+# Ignore Kuzu database directory
+/db
+
+# Node/Bun
+node_modules/
+.bun/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun.lockb

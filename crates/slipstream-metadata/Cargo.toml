@@ -7,7 +7,6 @@ edition.workspace = true
 default = ["in-memory-providers"]
 in-memory = []
 in-memory-providers = ["in-memory"]
-http-registry = []
 
 [dependencies]
 async-nats.workspace = true

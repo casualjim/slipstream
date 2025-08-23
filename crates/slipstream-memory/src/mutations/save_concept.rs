@@ -32,7 +32,10 @@ impl DatabaseCommand for SaveConcept {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{migrations::RunConceptMigration, queries::GetConceptByUuid};
+  use crate::{
+    migrations::concept_migration::RunConceptMigration,
+    queries::get_concept_by_uuid::GetConceptByUuid,
+  };
   use futures::StreamExt;
   use jiff::Timestamp;
   use slipstream_store::Database;

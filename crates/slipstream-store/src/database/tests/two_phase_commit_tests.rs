@@ -123,7 +123,7 @@ async fn test_2pc_failures_under_concurrency() {
 
       // Use a shared name for some operations to cause conflicts
       let conflict_group = i / 10; // Creates 5 groups of 10 operations each
-  let unique_name = format!("conflict_group_{conflict_group}");
+      let unique_name = format!("conflict_group_{conflict_group}");
 
       let tracker = version_tracker_clone.clone();
       let tracker_inner = tracker.clone();
@@ -145,8 +145,7 @@ async fn test_2pc_failures_under_concurrency() {
                 schema,
                 vec![
                   Arc::new(StringArray::from(vec![entity_id.to_string()])) as arrow_array::ArrayRef,
-                  Arc::new(StringArray::from(vec![format!("Entity{i}")]))
-                    as arrow_array::ArrayRef,
+                  Arc::new(StringArray::from(vec![format!("Entity{i}")])) as arrow_array::ArrayRef,
                   Arc::new(Int64Array::from(vec![i])) as arrow_array::ArrayRef,
                   Arc::new(Int64Array::from(vec![conflict_group])) as arrow_array::ArrayRef,
                 ],

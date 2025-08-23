@@ -1,10 +1,6 @@
-mod get_concept_by_uuid;
-mod get_interaction_by_uuid;
-mod get_theme_by_uuid;
-
-pub use get_concept_by_uuid::GetConceptByUuid;
-pub use get_interaction_by_uuid::GetInteractionByUuid;
-pub use get_theme_by_uuid::GetThemeByUuid;
+pub mod get_concept_by_uuid;
+pub mod get_interaction_by_uuid;
+pub mod get_theme_by_uuid;
 
 use serde::{Deserialize, Serialize};
 

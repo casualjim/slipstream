@@ -31,7 +31,8 @@ impl DatabaseCommand for GetInteractionByUuid {
 mod tests {
   use super::*;
   use crate::{
-    migrations::RunInteractionMigration, mutations::SaveInteraction, nodes::ContentType,
+    migrations::interaction_migration::RunInteractionMigration,
+    mutations::save_interaction::SaveInteraction, nodes::ContentType,
   };
   use futures::StreamExt;
   use jiff::Timestamp;

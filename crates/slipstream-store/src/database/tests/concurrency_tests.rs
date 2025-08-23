@@ -240,8 +240,7 @@ async fn test_concurrent_2pc_operations() {
                 schema,
                 vec![
                   Arc::new(StringArray::from(vec![entity_id.to_string()])) as arrow_array::ArrayRef,
-                  Arc::new(StringArray::from(vec![format!("Entity{i}")]))
-                    as arrow_array::ArrayRef,
+                  Arc::new(StringArray::from(vec![format!("Entity{i}")])) as arrow_array::ArrayRef,
                   Arc::new(Int64Array::from(vec![i])) as arrow_array::ArrayRef,
                 ],
               )?;

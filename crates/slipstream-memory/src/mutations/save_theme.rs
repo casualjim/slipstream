@@ -31,7 +31,9 @@ impl DatabaseCommand for SaveTheme {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{migrations::RunThemeMigration, queries::GetThemeByUuid};
+  use crate::{
+    migrations::theme_migration::RunThemeMigration, queries::get_theme_by_uuid::GetThemeByUuid,
+  };
   use futures::StreamExt;
   use jiff::Timestamp;
   use slipstream_store::Database;

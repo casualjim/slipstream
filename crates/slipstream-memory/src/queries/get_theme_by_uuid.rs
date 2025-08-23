@@ -31,7 +31,7 @@ impl DatabaseCommand for GetThemeByUuid {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{migrations::RunThemeMigration, mutations::SaveTheme};
+  use crate::{migrations::theme_migration::RunThemeMigration, mutations::save_theme::SaveTheme};
   use futures::StreamExt;
   use jiff::Timestamp;
   use slipstream_store::Database;

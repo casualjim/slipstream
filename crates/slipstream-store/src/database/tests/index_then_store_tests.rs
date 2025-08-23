@@ -1,9 +1,11 @@
 use tempfile::tempdir;
 
 use super::tests_helpers::*;
-use crate::{Database, DatabaseCommand, DatabaseOperation, PrimaryStoreQuery, ResultStream, NoData};
 use crate::operations::GraphIndexQuery;
 use crate::operations::QueryOperation::IndexThenStore;
+use crate::{
+  Database, DatabaseCommand, DatabaseOperation, NoData, PrimaryStoreQuery, ResultStream,
+};
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow_array::{RecordBatch, StringArray};
 use futures::{StreamExt, TryStreamExt};
@@ -99,8 +101,10 @@ async fn test_index_then_store_pattern() {
         test_uuid1.to_string(),
         test_uuid2.to_string(),
       ])) as arrow_array::ArrayRef,
-      std::sync::Arc::new(StringArray::from(vec!["test-group", "test-group"])) as arrow_array::ArrayRef,
-      std::sync::Arc::new(StringArray::from(vec!["Episode 1", "Episode 2"])) as arrow_array::ArrayRef,
+      std::sync::Arc::new(StringArray::from(vec!["test-group", "test-group"]))
+        as arrow_array::ArrayRef,
+      std::sync::Arc::new(StringArray::from(vec!["Episode 1", "Episode 2"]))
+        as arrow_array::ArrayRef,
     ],
   )
   .expect("Failed to create episode batch");
@@ -254,9 +258,7 @@ async fn test_index_then_store_empty_index() {
     type SaveData = NoData;
 
     fn to_operation(&self) -> DatabaseOperation<Self::Output, Self::SaveData> {
-      use crate::operations::{
-        GraphIndexQuery, PrimaryStoreQuery, QueryOperation::IndexThenStore,
-      };
+      use crate::operations::{GraphIndexQuery, PrimaryStoreQuery, QueryOperation::IndexThenStore};
 
       DatabaseOperation::Query(IndexThenStore {
         index: GraphIndexQuery {
@@ -374,9 +376,7 @@ async fn test_index_then_store_missing_table() {
     type SaveData = NoData;
 
     fn to_operation(&self) -> DatabaseOperation<Self::Output, Self::SaveData> {
-      use crate::operations::{
-        GraphIndexQuery, PrimaryStoreQuery, QueryOperation::IndexThenStore,
-      };
+      use crate::operations::{GraphIndexQuery, PrimaryStoreQuery, QueryOperation::IndexThenStore};
 
       DatabaseOperation::Query(IndexThenStore {
         index: GraphIndexQuery {

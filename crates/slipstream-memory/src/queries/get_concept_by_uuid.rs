@@ -31,7 +31,9 @@ impl DatabaseCommand for GetConceptByUuid {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{migrations::RunConceptMigration, mutations::SaveConcept};
+  use crate::{
+    migrations::concept_migration::RunConceptMigration, mutations::save_concept::SaveConcept,
+  };
   use futures::StreamExt;
   use jiff::Timestamp;
   use slipstream_store::Database;

@@ -75,8 +75,7 @@ impl DatabaseCommand for RunRelatesMigration {
                     invalid_at TIMESTAMP,
                     expired_at TIMESTAMP,
                     PRIMARY KEY (uuid)
-                )"#
-          .into(),
+                )"#,
       ],
 
       meta_setup: Box::new(move |conn| {
@@ -235,7 +234,8 @@ mod tests {
     let db = Database::new(&config).await.unwrap();
 
     // First run node migrations - edges require nodes to exist
-    db.execute(crate::migrations::RunConceptMigration {
+    use crate::migrations::concept_migration::RunConceptMigration;
+    db.execute(RunConceptMigration {
       embedding_function_name: config.embedding.provider.clone(),
     })
     .await

@@ -22,8 +22,7 @@ impl DatabaseCommand for RunInteractionMigration {
                     valid_at TIMESTAMP,
                     created_at TIMESTAMP,
                     PRIMARY KEY (uuid)
-                )"#
-          .into(),
+                )"#,
       ],
 
       meta_setup: Box::new(move |conn| Box::pin(create_interactions_lance_table(conn))),

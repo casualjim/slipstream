@@ -671,13 +671,13 @@ mod tests {
       let history: Vec<_> = iter.collect();
       assert_eq!(history.len(), 2);
       assert!(last.is_some());
-      if let Some(msg) = last {
-        if let ModelMessage::Request(Request::User(user)) = &msg.payload {
-          if let ContentOrParts::Content(s) = &user.content {
-            assert_eq!(s, "message 3");
-          } else {
-            panic!("Expected Content variant");
-          }
+      if let Some(msg) = last
+        && let ModelMessage::Request(Request::User(user)) = &msg.payload
+      {
+        if let ContentOrParts::Content(s) = &user.content {
+          assert_eq!(s, "message 3");
+        } else {
+          panic!("Expected Content variant");
         }
       }
     }

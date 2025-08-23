@@ -19,7 +19,7 @@ description: "Instructions for agentic coding agents working in this repository"
   - Rust server: `cargo run --package slipstream-server`
 
 ## Code Style & Formatting
-- Rust: 
+- Rust:
   - Use `eyre::Result` for error handling, `thiserror` for domain errors
   - No `unwrap()` or `expect()` in public APIs
   - Async streaming first - avoid `collect()` patterns

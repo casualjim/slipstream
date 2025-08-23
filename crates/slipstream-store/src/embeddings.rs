@@ -39,11 +39,11 @@ impl lancedb::embeddings::EmbeddingFunction for EmbeddingFunction {
     &self.provider
   }
 
-  fn source_type(&self) -> lancedb::Result<Cow<DataType>> {
+  fn source_type(&self) -> lancedb::Result<Cow<'_, DataType>> {
     Ok(Cow::Owned(DataType::Utf8))
   }
 
-  fn dest_type(&self) -> lancedb::Result<Cow<DataType>> {
+  fn dest_type(&self) -> lancedb::Result<Cow<'_, DataType>> {
     Ok(Cow::Owned(DataType::new_fixed_size_list(
       DataType::Float32,
       self.dimensions,

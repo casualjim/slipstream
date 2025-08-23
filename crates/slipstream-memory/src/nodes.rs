@@ -20,18 +20,13 @@ use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
 /// Episode type enum matching Graphiti's EpisodeType
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ContentType {
   Message,
   Json,
+  #[default]
   Text,
-}
-
-impl Default for ContentType {
-  fn default() -> Self {
-    ContentType::Text
-  }
 }
 
 impl Display for ContentType {

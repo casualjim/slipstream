@@ -1,12 +1,18 @@
 {
   "name": "slipstream",
   "private": true,
-  "workspaces": ["workers/llm-agents"],
+  "workspaces": [
+    "workers/llm-agents",
+    "playground/kuzuts"
+  ],
   "devDependencies": {
     "@types/bun": "^1.2.19",
     "uuid": "^11.1.0"
   },
   "peerDependencies": {
     "typescript": "^5.9.2"
-  }
+  },
+  "trustedDependencies": [
+    "kuzu"
+  ]
 }

@@ -32,7 +32,8 @@ impl DatabaseCommand for SaveInteraction {
 mod tests {
   use super::*;
   use crate::{
-    migrations::RunInteractionMigration, nodes::ContentType, queries::GetInteractionByUuid,
+    migrations::interaction_migration::RunInteractionMigration, nodes::ContentType,
+    queries::get_interaction_by_uuid::GetInteractionByUuid,
   };
   use futures::StreamExt;
   use jiff::Timestamp;

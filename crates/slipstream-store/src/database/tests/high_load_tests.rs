@@ -1,9 +1,9 @@
-use tempfile::tempdir;
 use super::tests_helpers::*;
 use crate::Database;
 use arrow::datatypes::{DataType, Field, Schema as ArrowSchema};
 use arrow_array::{Int64Array, RecordBatch, StringArray};
 use futures::{StreamExt, TryStreamExt};
+use tempfile::tempdir;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[tokio::test]

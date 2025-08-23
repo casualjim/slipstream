@@ -1,0 +1,20 @@
+{
+  "name": "kuzuts-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "clean": "rm -rf ./db"
+  },
+  "dependencies": {
+    "kuzu": "latest",
+    "ai": "5",
+    "ollama-ai-provider-v2": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "trustedDependencies": [
+    "kuzu"
+  ]
+}

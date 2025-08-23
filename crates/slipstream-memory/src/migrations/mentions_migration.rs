@@ -21,8 +21,7 @@ impl DatabaseCommand for RunMentionsMigration {
             group_id STRING,
             created_at TIMESTAMP,
             PRIMARY KEY (uuid)
-          )"#
-          .into(),
+          )"#,
       ],
 
       meta_setup: Box::new(move |conn| Box::pin(create_mentions_lance_table(conn))),
@@ -78,10 +77,10 @@ mod tests {
     let db = Database::new(&config).await.unwrap();
 
     // First run node migrations - edges require nodes to exist
-    db.execute(crate::migrations::RunInteractionMigration)
+    db.execute(crate::migrations::interaction_migration::RunInteractionMigration)
       .await
       .expect("Interaction migration should succeed");
-    db.execute(crate::migrations::RunConceptMigration {
+    db.execute(crate::migrations::concept_migration::RunConceptMigration {
       embedding_function_name: config.embedding.provider.clone(),
     })
     .await
