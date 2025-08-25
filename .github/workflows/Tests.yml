@@ -45,6 +45,11 @@ jobs:
       - name: Enforce cargo-hakari
         run: mise run hakari:verify
 
+      - name: Build container (cargo-chef)
+        run: |
+          docker version
+          mise run docker:build
+
       - name: Test
         run: mise test
 

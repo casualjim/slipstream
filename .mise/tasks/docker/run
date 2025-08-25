@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run the built image locally.
+BIN=${BIN:-slipstream-server}
+TAG=${TAG:-slipstream:${BIN}}
+PORT=${PORT:-8787}
+
+exec docker run --rm -p "${PORT}:8787" "${TAG}"

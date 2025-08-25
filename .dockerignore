@@ -1,0 +1,18 @@
+# Ignore build outputs and local files
+/target
+**/target
+**/*.rs.bk
+
+.env*
+.env.local
+**/.DS_Store
+
+# Node/Bun artifacts from workers, if any
+node_modules
+**/node_modules
+bun.lockb
+
+# Docker artifacts
+**/.dockerignore
+**/Dockerfile
+

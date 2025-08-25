@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build the container using cargo-chef Dockerfile.
+# BIN can be overridden to build a different package.
+BIN=${BIN:-slipstream-server}
+TAG=${TAG:-slipstream:${BIN}}
+
+DOCKER_BUILDKIT=1 docker build \
+  --build-arg BIN="${BIN}" \
+  -t "${TAG}" \
+  -f Dockerfile .
+
+echo "Built image: ${TAG}"
