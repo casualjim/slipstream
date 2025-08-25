@@ -12,6 +12,7 @@ use axum::{
   response::IntoResponse,
   routing::{get, post},
 };
+use slipstream_restate::axum::RestateService;
 
 pub fn openapi() -> OpenApi {
   OpenApi {
@@ -26,9 +27,12 @@ pub fn openapi() -> OpenApi {
 }
 
 pub fn router(app: AppState) -> ApiRouter<AppState> {
+  let restate_service = RestateService::new();
+
   ApiRouter::new()
     .route("/api/v1/messages", post(handle_add_messages))
-    .route("/healthz", get(health_check)) // Add health check endpoin
+    .route("/healthz", get(health_check))
+    .nest_service("/restate", restate_service) // Restate service invocation
     .with_state(app)
 }
 

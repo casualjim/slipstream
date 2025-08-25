@@ -29,6 +29,7 @@ serde.workspace = true
 serde_json.workspace = true
 slipstream-core = { path = "../slipstream-core" }
 slipstream-memory = { path = "../slipstream-memory" }
+slipstream-restate = { path = "../slipstream-restate" }
 
 # sqlx = { version = "0.8.6", features = ["sqlite-unbundled", "runtime-tokio"] }
 tokio.workspace = true
@@ -43,5 +44,6 @@ tower-http = { version = "0.6.6", features = [
 ] }
 tower-layer = { version = "0.3.3" }
 tracing.workspace = true
+tracing-subscriber.workspace = true
 uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

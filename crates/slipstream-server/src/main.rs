@@ -6,6 +6,8 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+  tracing_subscriber::fmt::init();
+
   rustls::crypto::aws_lc_rs::default_provider()
     .install_default()
     .expect("Failed to install AWS LC crypto provider");

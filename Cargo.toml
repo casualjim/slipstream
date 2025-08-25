@@ -31,12 +31,12 @@ eyre = "0.6"
 
 futures = "0.3"
 
-http-cache = { version = "=1.0.0-alpha.1", default-features = false, features = [
+http-cache = { version = "=1.0.0-alpha.2", default-features = false, features = [
   "manager-moka",
   "streaming-tokio",
   "with-http-types",
 ] }
-http-cache-reqwest = { version = "=1.0.0-alpha.1", default-features = false, features = [
+http-cache-reqwest = { version = "=1.0.0-alpha.2", default-features = false, features = [
   "manager-moka",
   "streaming",
 ] }
@@ -71,6 +71,7 @@ reqwest-middleware = "0.4.2"
 reqwest-retry = "0.7.0"
 reqwest-tracing = { version = "0.5.8", features = ["opentelemetry_0_30"] }
 restate-sdk = { version = "0.6", features = ["schemars"] }
+restate-sdk-shared-core  = "0.4.0"
 
 schemars = { version = "1.0.4", features = ["jiff02", "either1", "uuid1"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
@@ -79,7 +80,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
 tempfile = "3.20.0"
 
-thiserror = "2.0.15"
+thiserror = "2.0.16"
 time = "0.3"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
