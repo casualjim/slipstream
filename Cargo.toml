@@ -1,6 +1,6 @@
 
 [workspace]
-members = ["crates/*"]
+members = ["crates/*","workspace-hack"]
 resolver = "3"
 
 [workspace.package]

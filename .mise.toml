@@ -11,6 +11,7 @@ mkcert = "latest"
 bun = "latest"
 "cargo:cargo-sort" = "latest"
 "ubi:j178/prek" = "0.0.23"
+"cargo:cargo-hakari" = "latest"
 
 [env]
 _.file = ".env.local"
