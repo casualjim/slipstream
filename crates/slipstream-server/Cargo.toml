@@ -44,3 +44,4 @@ tower-http = { version = "0.6.6", features = [
 tower-layer = { version = "0.3.3" }
 tracing.workspace = true
 uuid.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
