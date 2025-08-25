@@ -25,7 +25,7 @@ repos:
         description: Check that Cargo.toml dependencies are sorted alphabetically
         entry: cargo
         language: system
-        args: ["sort", "--workspace"]
+        args: ["sort", "--workspace", "--grouped", "."]
         files: '^Cargo\.toml$'
         pass_filenames: false
 
@@ -34,6 +34,7 @@ repos:
     hooks:
       - id: biome-check
         exclude: ".vscode/*.json"
+
   - repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.10.0
     hooks:
