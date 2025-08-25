@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cargo hakari generate
+cargo hakari manage-deps --yes
+# Verify no diffs after generation + manage-deps
+if ! git diff --quiet --exit-code; then
+  echo "Hakari outputs are out of date. Commit the changes from hakari and re-run." >&2
+  git --no-pager diff
+  exit 1
+fi
+
