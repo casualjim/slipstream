@@ -25,7 +25,7 @@ use rustls::ServerConfig;
 use rustls_acme::{AcmeConfig, caches::DirCache};
 use tokio::{signal, task::JoinHandle, time::sleep};
 use tower_http::compression::CompressionLayer;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::app::AppState;
 
@@ -189,7 +189,7 @@ fn metrics_layer() -> HttpMetricsLayer {
 }
 
 async fn make_tls_config(args: &Config) -> eyre::Result<(RustlsConfig, JoinHandle<()>)> {
-  let (config, mut maybe_state) = match (&args.tls_cert, &args.tls_key) {
+  let (config, maybe_state) = match (&args.tls_cert, &args.tls_key) {
     (None, None) => {
       // we're in acme mode
       let state = AcmeConfig::new(args.domains.iter())
@@ -210,12 +210,11 @@ async fn make_tls_config(args: &Config) -> eyre::Result<(RustlsConfig, JoinHandl
     (Some(cert_path), Some(key_path)) => {
       tracing::debug!("starting server: key={key_path:?}, cert={cert_path:?}");
 
-      (
-        RustlsConfig::from_pem_file(cert_path, key_path)
-          .await
-          .unwrap(),
-        None,
-      )
+      let config = RustlsConfig::from_pem_file(cert_path, key_path)
+        .await
+        .map_err(|e| eyre::eyre!("Failed to load TLS certificates: {}", e))?;
+
+      (config, None)
     }
     _ => {
       return Err(eyre::anyhow!(
@@ -224,16 +223,44 @@ async fn make_tls_config(args: &Config) -> eyre::Result<(RustlsConfig, JoinHandl
     }
   };
 
+  // Clone values for the reloading task before moving into the async block
+  let config_clone = config.clone();
+  let cert_path = args.tls_cert.clone();
+  let key_path = args.tls_key.clone();
+
   let jh = tokio::spawn(async move {
-    if maybe_state.is_none() {
-      return;
+    // Start periodic reloading task if we're in keypair mode
+    if let (Some(cert_path), Some(key_path)) = (cert_path, key_path) {
+      tokio::spawn(async move {
+        // Run periodic reload every hour
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(3600));
+        
+        // Skip the first tick which happens immediately
+        interval.tick().await;
+        
+        loop {
+          interval.tick().await;
+          
+          match config_clone.reload_from_pem_file(&cert_path, &key_path).await {
+            Ok(_) => info!("TLS certificates reloaded successfully"),
+            Err(e) => warn!("Failed to reload TLS certificates: {}", e),
+          }
+        }
+      });
     }
-    let mut state = maybe_state.take().unwrap();
-    loop {
-      match state.next().await.unwrap() {
-        Ok(ok) => info!("event: {ok:?}"),
-        Err(err) => error!("error: {:?}", err),
+    
+    // Handle ACME state if present
+    if let Some(mut state) = maybe_state {
+      loop {
+        match state.next().await.unwrap() {
+          Ok(ok) => info!("event: {ok:?}"),
+          Err(err) => error!("error: {:?}", err),
+        }
       }
+    } else {
+      // For keypair mode, we need to keep the task alive
+      // The reloading is handled in the spawned task above
+      futures::future::pending::<()>().await;
     }
   });
 
