@@ -5,7 +5,6 @@ use futures::{FutureExt, TryStreamExt};
 use http::header::CONTENT_TYPE;
 use http::{HeaderName, HeaderValue, response};
 use restate_sdk::endpoint::{self, Endpoint, InputReceiver, OutputSender};
-
 use restate_sdk_shared_core::Header;
 use std::convert::Infallible;
 use std::future::Future;
@@ -13,19 +12,22 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 use tokio::sync::mpsc;
-use tower::Service;
+use tower::Service as TowerService;
 use tracing::{debug, warn};
 
-use crate::{Greeter as _, GreeterImpl};
+use crate::greeter::{Greeter as _, GreeterImpl};
+use crate::ratelimit::{RateLimiter as _, RateLimiterImpl};
 
 #[allow(clippy::declare_interior_mutable_const)]
 const X_RESTATE_SERVER: HeaderName = HeaderName::from_static("x-restate-server");
-const X_RESTATE_SERVER_VALUE: HeaderValue =
-  HeaderValue::from_static(concat!("restate-sdk-rust/", env!("CARGO_PKG_VERSION")));
+const X_RESTATE_SERVER_VALUE: HeaderValue = HeaderValue::from_static("restate-sdk-rust/0.6.0");
 
 /// Creates a Restate endpoint with all bound services
 pub fn create_restate_endpoint() -> Endpoint {
-  Endpoint::builder().bind(GreeterImpl.serve()).build()
+  Endpoint::builder()
+    .bind(GreeterImpl.serve())
+    .bind(RateLimiterImpl.serve())
+    .build()
 }
 
 /// Tower service that wraps Restate Endpoint directly
@@ -35,20 +37,18 @@ pub struct RestateService {
 }
 
 impl RestateService {
-  pub fn new() -> Self {
-    Self {
-      endpoint: create_restate_endpoint(),
-    }
+  pub fn new(endpoint: Endpoint) -> Self {
+    Self { endpoint }
   }
 }
 
 impl Default for RestateService {
   fn default() -> Self {
-    Self::new()
+    Self::new(create_restate_endpoint())
   }
 }
 
-impl Service<Request> for RestateService {
+impl TowerService<Request> for RestateService {
   type Response = Response;
   type Error = Infallible;
   type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -213,7 +213,7 @@ mod tests {
       .unwrap();
 
     // Create the service and call it
-    let response = RestateService::new().oneshot(request).await.unwrap();
+    let response = RestateService::default().oneshot(request).await.unwrap();
 
     // Should get a 200 response
     if response.status() != StatusCode::OK {
@@ -241,7 +241,7 @@ mod tests {
       .unwrap();
 
     // Create the service and call it
-    let response = RestateService::new().oneshot(request).await.unwrap();
+    let response = RestateService::default().oneshot(request).await.unwrap();
 
     // Should get a 4xx or 5xx status
     assert!(response.status().is_client_error() || response.status().is_server_error());
