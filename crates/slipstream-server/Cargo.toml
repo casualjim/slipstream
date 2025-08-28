@@ -6,11 +6,11 @@ edition.workspace = true
 [dependencies]
 aide = { version = "0.15", features = ["axum-json", "axum-query", "axum-matched-path", "axum-tokio", "axum-extra-query", "axum-extra-json-deserializer", "redoc", "scalar"] }
 async-compression = { version = "0.4", features = ["brotli", "gzip", "deflate", "deflate64", "zlib", "tokio"] }
-axum = { version = "0.8.4", features = ["macros", "multipart", "ws", "http2"] }
+axum = { workspace = true, features = ["macros", "multipart", "ws", "http2"] }
 axum-helmet = "0.2.0"
 axum-otel-metrics = "0.12.0"
 axum-server = { version = "0.7.2", features = ["tls-rustls"] }
-axum-tracing-opentelemetry = "0.29.0"
+axum-tracing-opentelemetry = "0.30.0"
 
 # configuration and CLI
 confique = "0.3"
@@ -32,7 +32,6 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 slipstream-core = { path = "../slipstream-core" }
-slipstream-memory = { path = "../slipstream-memory" }
 slipstream-restate = { path = "../slipstream-restate" }
 
 # sqlx = { version = "0.8.6", features = ["sqlite-unbundled", "runtime-tokio"] }

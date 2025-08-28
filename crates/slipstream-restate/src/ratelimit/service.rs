@@ -1,4 +1,5 @@
 use restate_sdk::prelude::*;
+use schemars::JsonSchema;
 
 use crate::ratelimit::{INFINITY, TokenBucketState};
 
@@ -26,13 +27,13 @@ pub trait RateLimiter {
   async fn state() -> Result<Json<TokenBucketState>, HandlerError>;
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, JsonSchema)]
 pub struct InitParams {
   pub limit: f64,
   pub burst: f64,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, JsonSchema)]
 pub struct SetRateParams {
   pub limit: f64,
   pub burst: Option<f64>,
@@ -132,7 +133,9 @@ impl RateLimiter for RateLimiterImpl {
       return Err(eyre::eyre!("Invalid rate: {}. Rate must be positive.", limit).into());
     }
 
-    if let Some(burst) = burst && burst <= 0.0 {
+    if let Some(burst) = burst
+      && burst <= 0.0
+    {
       return Err(eyre::eyre!("Invalid burst: {}. Burst must be positive.", burst).into());
     }
 

@@ -16,3 +16,5 @@ mcp.json
 crush.json
 CRUSH.md
 compose.override.yml
+QWEN.md
+qwen-*.sh

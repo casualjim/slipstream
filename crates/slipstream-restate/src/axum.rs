@@ -42,12 +42,6 @@ impl RestateService {
   }
 }
 
-impl Default for RestateService {
-  fn default() -> Self {
-    Self::new(create_restate_endpoint())
-  }
-}
-
 impl TowerService<Request> for RestateService {
   type Response = Response;
   type Error = Infallible;
@@ -213,7 +207,10 @@ mod tests {
       .unwrap();
 
     // Create the service and call it
-    let response = RestateService::default().oneshot(request).await.unwrap();
+    let response = RestateService::new(create_restate_endpoint())
+      .oneshot(request)
+      .await
+      .unwrap();
 
     // Should get a 200 response
     if response.status() != StatusCode::OK {
@@ -241,7 +238,10 @@ mod tests {
       .unwrap();
 
     // Create the service and call it
-    let response = RestateService::default().oneshot(request).await.unwrap();
+    let response = RestateService::new(create_restate_endpoint())
+      .oneshot(request)
+      .await
+      .unwrap();
 
     // Should get a 4xx or 5xx status
     assert!(response.status().is_client_error() || response.status().is_server_error());
