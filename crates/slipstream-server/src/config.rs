@@ -1,59 +1,143 @@
-use clap::Parser;
+use clap::{Args, Parser};
 use confique::Config as _;
-use serde::Deserialize;
+use std::path::PathBuf;
 
-#[derive(confique::Config, Debug, Clone, Deserialize)]
-#[config(partial_attr(derive(Parser, Debug)))]
+#[derive(confique::Config, Debug, Clone)]
 pub struct AppConfig {
-  #[serde(default)]
-  #[config(nested, partial_attr(clap::flatten))]
+  #[config(nested)]
   pub server: Server,
+  #[config(nested)]
+  pub auth: Auth,
 }
 
-#[derive(confique::Config, Debug, Clone, Deserialize)]
+#[derive(confique::Config, Debug, Clone)]
 pub struct Server {
-  #[serde(default = "default_http_port")]
+  // Networking
+  #[config(default = 8080, env = "SLIPSTREAM__HTTP_PORT")]
   pub http_port: u16,
-  #[serde(default = "default_https_port")]
+  #[config(default = 8443, env = "SLIPSTREAM__HTTPS_PORT")]
   pub https_port: u16,
-  #[serde(default = "default_admin_port")]
-  pub admin_http_port: u16,
-  #[serde(default)]
+  #[config(default = 9090, env = "SLIPSTREAM__MONITORING_PORT")]
+  pub monitoring_port: u16,
+
+  // TLS toggle
+  #[config(default = false, env = "SLIPSTREAM__TLS_ENABLED")]
   pub tls_enabled: bool,
+
+  // TLS/ACME configuration (optional)
+  #[config(default = [])]
+  pub domains: Vec<String>,
+  #[config(default = [])]
+  pub email: Vec<String>,
+
+  pub cache: Option<PathBuf>,
+  #[config(default = false)]
+  pub production: bool,
+  pub tls_key: Option<PathBuf>,
+  pub tls_cert: Option<PathBuf>,
 }
 
-fn default_http_port() -> u16 { 8080 }
-fn default_https_port() -> u16 { 8443 }
-fn default_admin_port() -> u16 { 9090 }
+#[derive(confique::Config, Debug, Clone)]
+pub struct Auth {
+  #[config(
+    default = "https://wagyu-tunhvc.zitadel.cloud",
+    env = "SLIPSTREAM__AUTH__ISSUER_URL"
+  )]
+  pub issuer_url: String,
+  #[config(
+    default = "https://wagyu-tunhvc.zitadel.cloud",
+    env = "SLIPSTREAM__AUTH__AUDIENCE"
+  )]
+  pub audience: String,
+  #[config(default = 60, env = "SLIPSTREAM__AUTH__LEEWAY_SECONDS")]
+  pub leeway_seconds: u64,
+}
 
-pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
-  // Load files + env as a Partial
-  let files_and_env: AppConfigPartial = AppConfig::builder()
-    .env(
-      confique::env::Source::new("SLIPSTREAM")
-        .with_separator("__")
-        .try_convert(true),
-    )
+#[derive(Debug, Parser, Default, Clone)]
+struct CliArgs {
+  #[command(flatten)]
+  server: ServerArgs,
+  #[command(flatten)]
+  auth: AuthArgs,
+}
+
+#[derive(Debug, Args, Default, Clone)]
+struct ServerArgs {
+  #[arg(long = "http-port")]
+  http_port: Option<u16>,
+  #[arg(long = "https-port")]
+  https_port: Option<u16>,
+  #[arg(long = "monitoring-port")]
+  monitoring_port: Option<u16>,
+  #[arg(long = "tls-enabled")]
+  tls_enabled: Option<bool>,
+}
+
+#[derive(Debug, Args, Default, Clone)]
+struct AuthArgs {
+  #[arg(long = "issuer-url")]
+  issuer_url: Option<String>,
+  #[arg(long = "audience")]
+  audience: Option<String>,
+  #[arg(long = "leeway-seconds")]
+  leeway_seconds: Option<u64>,
+}
+
+pub fn load_config() -> eyre::Result<AppConfig> {
+  load_config_with_args(std::env::args_os())
+}
+
+pub fn load_config_with_args<I, T>(args: I) -> eyre::Result<AppConfig>
+where
+  I: IntoIterator<Item = T>,
+  T: Into<std::ffi::OsString> + Clone,
+{
+  // files + env
+  let mut cfg = AppConfig::builder()
+    .env()
+    .file("config/local.toml")
+    .file("/etc/slipstream/secrets.toml")
+    .file("/etc/slipstream/config.toml")
     .file("config/default.toml")
-    .file_optional("config/local.toml")
-    .file_optional("/etc/slipstream/config.toml")
-    .file_optional("/etc/slipstream/secrets.toml")
-    .load_partial()?;
+    .load()
+    .map_err(|e| eyre::eyre!(e.to_string()))?;
 
-  // Parse CLI as a Partial (highest precedence)
-  let cli: AppConfigPartial = <AppConfigPartial as Parser>::parse();
+  // CLI overlay
+  let cli = CliArgs::parse_from(args);
+  if let Some(v) = cli.server.http_port {
+    cfg.server.http_port = v;
+  }
+  if let Some(v) = cli.server.https_port {
+    cfg.server.https_port = v;
+  }
+  if let Some(v) = cli.server.monitoring_port {
+    cfg.server.monitoring_port = v;
+  }
+  if let Some(v) = cli.server.tls_enabled {
+    cfg.server.tls_enabled = v;
+  }
 
-  // Merge and complete
-  let merged = files_and_env.merge(cli);
-  let cfg = merged.try_complete()?;
+  if let Some(v) = cli.auth.issuer_url {
+    cfg.auth.issuer_url = v;
+  }
+  if let Some(v) = cli.auth.audience {
+    cfg.auth.audience = v;
+  }
+  if let Some(v) = cli.auth.leeway_seconds {
+    cfg.auth.leeway_seconds = v;
+  }
+
   Ok(cfg)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use clap::Parser as _;
-  use std::{env, fs, path::PathBuf, sync::{Mutex, OnceLock}};
+  use std::{
+    env, fs,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
+  };
   use uuid::Uuid;
 
   // Serialize env-dependent tests
@@ -72,14 +156,11 @@ mod tests {
 
   #[test]
   fn config_defaults_when_no_sources() {
-    // Build only defaults (no files, no env, no CLI)
-    let files_and_env: AppConfigPartial = AppConfig::builder().load_partial().unwrap();
-    let cli: AppConfigPartial = <AppConfigPartial as Parser>::parse_from(["bin"]);
-    let cfg = files_and_env.merge(cli).try_complete().unwrap();
-
+    // No files, no env, CLI empty
+    let cfg = AppConfig::builder().env().load().unwrap();
     assert_eq!(cfg.server.http_port, 8080);
     assert_eq!(cfg.server.https_port, 8443);
-    assert_eq!(cfg.server.admin_http_port, 9090);
+    assert_eq!(cfg.server.monitoring_port, 9090);
     assert!(!cfg.server.tls_enabled);
   }
 
@@ -89,22 +170,16 @@ mod tests {
       r#"[server]
 http_port = 18080
 https_port = 18443
-admin_http_port = 19090
+monitoring_port = 19090
 tls_enabled = true
 "#,
     );
 
-    let files: AppConfigPartial = AppConfig::builder()
-      .file(&path)
-      .load_partial()
-      .unwrap();
-
-    let cli: AppConfigPartial = <AppConfigPartial as Parser>::parse_from(["bin"]);
-    let cfg = files.merge(cli).try_complete().unwrap();
+    let cfg = AppConfig::builder().env().file(&path).load().unwrap();
 
     assert_eq!(cfg.server.http_port, 18080);
     assert_eq!(cfg.server.https_port, 18443);
-    assert_eq!(cfg.server.admin_http_port, 19090);
+    assert_eq!(cfg.server.monitoring_port, 19090);
     assert!(cfg.server.tls_enabled);
   }
 
@@ -117,41 +192,32 @@ http_port = 18080
 "#,
     );
 
-    env::set_var("SLIPSTREAM__SERVER__HTTP_PORT", "28080");
+    unsafe {
+      env::set_var("SLIPSTREAM__HTTP_PORT", "28080");
+    }
 
-    let layered: AppConfigPartial = AppConfig::builder()
-      .file(&path)
-      .env(confique::env::Source::new("SLIPSTREAM").with_separator("__").try_convert(true))
-      .load_partial()
-      .unwrap();
-
-    let cli: AppConfigPartial = <AppConfigPartial as Parser>::parse_from(["bin"]);
-    let cfg = layered.merge(cli).try_complete().unwrap();
+    let cfg = AppConfig::builder().env().file(&path).load().unwrap();
 
     assert_eq!(cfg.server.http_port, 28080);
 
-    env::remove_var("SLIPSTREAM__SERVER__HTTP_PORT");
+    unsafe {
+      env::remove_var("SLIPSTREAM__HTTP_PORT");
+    }
   }
 
   #[test]
   fn cli_overrides_env() {
     let _g = env_lock();
-    env::set_var("SLIPSTREAM__SERVER__HTTP_PORT", "28080");
+    unsafe {
+      env::set_var("SLIPSTREAM__HTTP_PORT", "28080");
+    }
 
-    let env_only: AppConfigPartial = AppConfig::builder()
-      .env(confique::env::Source::new("SLIPSTREAM").with_separator("__").try_convert(true))
-      .load_partial()
-      .unwrap();
+    let cfg = super::load_config_with_args(["slipstream-server", "--http-port", "38080"]).unwrap();
 
-    let cli: AppConfigPartial = <AppConfigPartial as Parser>::parse_from([
-      "bin",
-      "--server-http-port",
-      "38080",
-    ]);
-
-    let cfg = env_only.merge(cli).try_complete().unwrap();
     assert_eq!(cfg.server.http_port, 38080);
 
-    env::remove_var("SLIPSTREAM__SERVER__HTTP_PORT");
+    unsafe {
+      env::remove_var("SLIPSTREAM__HTTP_PORT");
+    }
   }
 }

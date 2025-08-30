@@ -11,9 +11,10 @@ axum-helmet = "0.2.0"
 axum-otel-metrics = "0.12.0"
 axum-server = { version = "0.7.2", features = ["tls-rustls"] }
 axum-tracing-opentelemetry = "0.30.0"
+limes = { version = "0.2", features = ["all"] }
 
 # configuration and CLI
-confique = "0.3"
+confique = { version = "0.3.1", features = ["toml", "json5", "yaml"] }
 clap = { version = "4.5", features = ["derive"] }
 
 eyre.workspace = true
@@ -37,7 +38,7 @@ slipstream-restate = { path = "../slipstream-restate" }
 # sqlx = { version = "0.8.6", features = ["sqlite-unbundled", "runtime-tokio"] }
 tokio.workspace = true
 tokio-util.workspace = true
-tower = { version = "0.5.2" }
+tower = { workspace = true }
 tower-http = { version = "0.6.6", features = [
   "fs",
   "tracing",
@@ -50,3 +51,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+jsonwebtoken = "9"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

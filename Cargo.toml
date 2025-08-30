@@ -1,6 +1,6 @@
 
 [workspace]
-members = ["crates/*","workspace-hack"]
+members = ["crates/*", "workspace-hack"]
 resolver = "3"
 
 [workspace.package]
@@ -8,8 +8,6 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-arrow = "55.2"
-arrow-array = "55.2"
 assert_cmd = "2.0.17"
 async-nats = "0.42.0"
 async-openai = { git = "https://github.com/casualjim/async-openai", branch = "reqwest-middleware", default-features = false, features = [
@@ -35,7 +33,6 @@ futures = "0.3"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
-hyper = { version = "1" }
 http-cache = { version = "=1.0.0-alpha.2", default-features = false, features = [
   "manager-moka",
   "streaming-tokio",
@@ -45,11 +42,10 @@ http-cache-reqwest = { version = "=1.0.0-alpha.2", default-features = false, fea
   "manager-moka",
   "streaming",
 ] }
+hyper = { version = "1" }
 
 jiff = { version = "0.2.15", features = ["serde", "logging"] }
 kuzu = { version = "0.11.1", features = ["arrow"] }
-lancedb = { version = "0.21.3", features = ["polars"] }
-lzma-sys = { version = "0.1.20", features = ["static"] }
 mockall = "0.13.1"
 nuid = "0.6"
 
@@ -88,17 +84,17 @@ text-splitter = "0.27"
 thiserror = "2.0.16"
 tiktoken-rs = "0.7"
 time = "0.3"
+tokenizers = { version = "0.22", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 tokio-util = "0.7"
-tokenizers = { version = "0.21", default-features = false }
+tower = "0.5"
 tracing = { version = "0.1.41" }
 tracing-opentelemetry = "0.31.0"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 typed-builder = "0.21.0"
-tower = "0.5"
-uuid = { version = "1.17.0", features = ["js", "serde", "v7", "zerocopy"] }
 url = "2"
+uuid = { version = "1.17.0", features = ["js", "serde", "v7", "zerocopy"] }
 
 validator = { version = "0.20.0", features = ["derive"] }
 workspace-hack = { path = "workspace-hack", version = "0.1" }

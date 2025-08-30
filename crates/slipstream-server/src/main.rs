@@ -1,6 +1,5 @@
 use slipstream_server::config::load_config;
 use slipstream_server::server;
-use slipstream_server::server::Config;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -13,18 +12,12 @@ async fn main() -> eyre::Result<()> {
     .install_default()
     .expect("Failed to install AWS LC crypto provider");
 
-  // Load layered config (defaults < files < env < CLI)
-  let cfg = load_config().map_err(|e| eyre::eyre!(e.to_string()))?;
-
-  let mut config = Config::default();
-  config.tls_enabled = cfg.server.tls_enabled;
-  config.http_port = cfg.server.http_port;
-  config.https_port = cfg.server.https_port;
-  config.admin_http_port = cfg.server.admin_http_port;
+  // Load layered config (files < env < CLI)
+  let app_cfg = load_config()?;
 
   let (shutdown_token, signal_handle) = create_shutdown_token();
 
-  server::run(config, Some(shutdown_token)).await?;
+  server::run(app_cfg, Some(shutdown_token)).await?;
 
   signal_handle.abort();
   Ok(())

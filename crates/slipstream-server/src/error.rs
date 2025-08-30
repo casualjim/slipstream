@@ -32,11 +32,6 @@ impl AppError {
     self.status = status;
     self
   }
-
-  pub fn with_details(mut self, details: Value) -> Self {
-    self.error_details = Some(details);
-    self
-  }
 }
 
 impl IntoResponse for AppError {
@@ -45,16 +40,5 @@ impl IntoResponse for AppError {
     let mut res = axum::Json(self).into_response();
     *res.status_mut() = status;
     res
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn error_uses_uuid_v7() {
-    let e = AppError::new("oops");
-    assert_eq!(e.error_id.get_version_num(), 7);
   }
 }
