@@ -12,6 +12,10 @@ axum-otel-metrics = "0.12.0"
 axum-server = { version = "0.7.2", features = ["tls-rustls"] }
 axum-tracing-opentelemetry = "0.29.0"
 
+# configuration and CLI
+confique = "0.3"
+clap = { version = "4.5", features = ["derive"] }
+
 eyre.workspace = true
 futures.workspace = true
 http = "1"

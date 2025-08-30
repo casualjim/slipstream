@@ -22,7 +22,7 @@ impl AppError {
   pub fn new(error: &str) -> Self {
     Self {
       error: error.to_string(),
-      error_id: Uuid::new_v4(),
+      error_id: Uuid::now_v7(),
       status: StatusCode::BAD_REQUEST,
       error_details: None,
     }
@@ -45,5 +45,16 @@ impl IntoResponse for AppError {
     let mut res = axum::Json(self).into_response();
     *res.status_mut() = status;
     res
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn error_uses_uuid_v7() {
+    let e = AppError::new("oops");
+    assert_eq!(e.error_id.get_version_num(), 7);
   }
 }

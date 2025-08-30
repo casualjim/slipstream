@@ -1,0 +1,6 @@
+[server]
+http_port = 8080
+https_port = 8443
+admin_http_port = 9090
+tls_enabled = false
+

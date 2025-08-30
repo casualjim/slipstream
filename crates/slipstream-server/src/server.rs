@@ -71,6 +71,9 @@ pub struct Config {
 
   /// The port to listen on for unecrypted traffic
   pub http_port: u16,
+
+  /// Admin HTTP port (no auth), serves only health endpoints
+  pub admin_http_port: u16,
 }
 
 pub async fn run(
@@ -117,8 +120,31 @@ pub async fn run(
     .layer(CompressionLayer::new().quality(tower_http::CompressionLevel::Default))
     .with_state(state);
 
+  // Admin router (no OpenAPI, no auth): health checks only
+  let admin_router = Router::new().route("/healthz", get(|| async { "OK" }));
+
   // this will enable us to keep application running during recompile: systemfd --no-pid -s http::8080 -s https::8443 -- cargo watch -x run
   let mut listenfd = ListenFd::from_env();
+
+  // Start admin listener in parallel
+  let admin_listener = listenfd.take_tcp_listener(2)?.unwrap_or_else(|| {
+    let addr = SocketAddr::from((Ipv4Addr::UNSPECIFIED, args.admin_http_port));
+    TcpListener::bind(addr).unwrap_or_else(|_| panic!("failed to bind admin to {}", addr))
+  });
+
+  let admin_handle = Handle::new();
+  tokio::spawn(graceful_shutdown(admin_handle.clone(), shutdown_token.clone()));
+  tokio::spawn(async move {
+    debug!(addr = %admin_listener.local_addr().unwrap(), "starting admin HTTP server");
+    if let Err(e) = axum_server::from_tcp(admin_listener)
+      .handle(admin_handle)
+      .serve(admin_router.into_make_service())
+      .await
+    {
+      error!("Admin server error: {}", e);
+    }
+    info!("Admin server stopped");
+  });
 
   if let Some((config, _jh)) = tls_config_result {
     // TLS is enabled - set up both HTTP (for redirect) and HTTPS listeners
