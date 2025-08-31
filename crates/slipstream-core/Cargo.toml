@@ -4,25 +4,15 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-async-trait.workspace = true
 base64.workspace = true
-dashmap.workspace = true
-eyre.workspace = true
-http-cache.workspace = true
-http-cache-reqwest.workspace = true
 jiff.workspace = true
-reqwest.workspace = true
-reqwest-middleware.workspace = true
-reqwest-retry.workspace = true
-schemars.workspace = true
-secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-typed-builder.workspace = true
 uuid.workspace = true
 validator.workspace = true
-workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
+workspace-hack.workspace = true
