@@ -14,8 +14,19 @@ axum-tracing-opentelemetry = "0.30.0"
 limes = { version = "0.2", features = ["all"] }
 
 # configuration and CLI
-confique = { version = "0.3.1", features = ["toml", "json5", "yaml"] }
 clap = { version = "4.5", features = ["derive"] }
+confique = { version = "0.3.1", features = ["toml", "json5", "yaml"] }
+async-stream.workspace = true
+async-trait.workspace = true
+# storage and utils
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-credential-types = {version = "1", features = ["hardcoded-credentials"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
+bytes.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+secrecy.workspace = true
+flume.workspace = true
 
 eyre.workspace = true
 futures.workspace = true
@@ -34,6 +45,8 @@ serde.workspace = true
 serde_json.workspace = true
 slipstream-core = { path = "../slipstream-core" }
 slipstream-restate = { path = "../slipstream-restate" }
+thiserror.workspace = true
+url.workspace = true
 
 # sqlx = { version = "0.8.6", features = ["sqlite-unbundled", "runtime-tokio"] }
 tokio.workspace = true
@@ -54,5 +67,10 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 jsonwebtoken = "9"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls", "multipart"] }
+testcontainers.workspace = true
+testcontainers-modules = { workspace = true, features = ["minio"] }
+aws-credential-types = { version = "1", features = [ "test-util"] }
+aws-config = { version = "1", features = ["behavior-version-latest", "test-util"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["test-util"] }
 workspace-hack.workspace = true

@@ -46,7 +46,12 @@ async fn build_app(state: AppState, auth: &crate::config::Auth) -> eyre::Result<
   let issuer = auth.issuer_url.clone();
   let audience = auth.audience.clone();
 
-  let mut jwks = JWKSWebAuthenticator::new(&issuer, Some(std::time::Duration::from_secs(600)))
+  let refresh = if auth.jwks_refresh_seconds == 0 {
+    None
+  } else {
+    Some(std::time::Duration::from_secs(auth.jwks_refresh_seconds))
+  };
+  let mut jwks = JWKSWebAuthenticator::new(&issuer, refresh)
     .await
     .map_err(|e| eyre::eyre!(format!("failed to initialize JWKS auth: {e}")))?;
   if !audience.is_empty() {
@@ -94,41 +99,6 @@ struct Ports {
   https: u16,
 }
 
-// #[derive(Default, Debug)]
-// pub struct Config {
-//   /// Enable TLS/HTTPS
-//   pub tls_enabled: bool,
-
-//   /// Admin HTTP port (no auth), serves only health endpoints
-//   pub admin_http_port: u16,
-
-//   /// Path to store LanceDB data
-//   /// Domains
-//   pub domains: Vec<String>,
-
-//   /// Contact info
-//   pub email: Vec<String>,
-
-//   /// Cache directory
-//   pub cache: Option<PathBuf>,
-
-//   /// Use Let's Encrypt production environment
-//   /// (see https://letsencrypt.org/docs/staging-environment/)
-//   pub production: bool,
-
-//   /// The private key when tls-mode is keypair
-//   pub tls_key: Option<PathBuf>,
-
-//   /// The public key when tls-mode is keypair
-//   pub tls_cert: Option<PathBuf>,
-
-//   /// The port to listen on for secure traffic
-//   pub https_port: u16,
-
-//   /// The port to listen on for unecrypted traffic
-//   pub http_port: u16,
-// }
-
 pub async fn run(
   args: crate::config::AppConfig,
   shutdown_token: Option<tokio_util::sync::CancellationToken>,
@@ -145,7 +115,7 @@ pub async fn run(
     None
   };
 
-  let state = AppState::new().await?;
+  let state = AppState::new(&args).await?;
 
   let handle = Handle::new();
   tokio::spawn(graceful_shutdown(handle.clone(), shutdown_token.clone()));
@@ -460,6 +430,7 @@ async fn graceful_shutdown(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use axum::http::StatusCode;
   use tower::ServiceExt;
 
   // Stable issuer used in tests (matches application defaults)
@@ -595,14 +566,48 @@ mod tests {
     }
   }
 
+  fn make_test_config() -> crate::config::AppConfig {
+    crate::config::AppConfig {
+      server: crate::config::Server {
+        http_port: 0,
+        https_port: 0,
+        monitoring_port: 0,
+        tls_enabled: false,
+        domains: vec![],
+        email: vec![],
+        cache: None,
+        production: false,
+        tls_key: None,
+        tls_cert: None,
+      },
+      auth: crate::config::Auth {
+        issuer_url: test_issuer(),
+        audience: String::new(),
+        leeway_seconds: 60,
+        jwks_refresh_seconds: 0,
+      },
+      uploads: crate::config::Uploads {
+        bucket: "test-bucket".to_string(),
+        s3_endpoint: "http://localhost:9000".to_string(),
+        s3_region: "us-east-1".to_string(),
+        s3_access_key_id: secrecy::SecretString::from("minioadmin".to_string()),
+        s3_secret_access_key: secrecy::SecretString::from("minioadmin".to_string()),
+        s3_force_path_style: true,
+        max_file_size_bytes: 6 * 1024 * 1024,
+      },
+    }
+  }
+
   #[tokio::test]
   async fn public_openapi_is_accessible_without_auth() {
     let issuer = test_issuer();
-    let state = AppState::new().await.unwrap();
+    let cfg = make_test_config();
+    let state = AppState::new(&cfg).await.unwrap();
     let auth = crate::config::Auth {
       issuer_url: issuer,
       audience: String::new(),
       leeway_seconds: 60,
+      jwks_refresh_seconds: 0,
     };
     let app = build_app(state, &auth).await.unwrap();
 
@@ -619,11 +624,13 @@ mod tests {
   #[tokio::test]
   async fn protected_endpoint_without_token_returns_401() {
     let issuer = test_issuer();
-    let state = AppState::new().await.unwrap();
+    let cfg = make_test_config();
+    let state = AppState::new(&cfg).await.unwrap();
     let auth = crate::config::Auth {
       issuer_url: issuer,
       audience: String::new(),
       leeway_seconds: 60,
+      jwks_refresh_seconds: 0,
     };
     let app = build_app(state, &auth).await.unwrap();
 
@@ -646,12 +653,14 @@ mod tests {
     // Service user credentials for JWT Bearer Grant (obtain access token)
     let (user_id, key_id_json, private_key_pem) = load_test_user_key();
 
-    let state = AppState::new().await.unwrap();
+    let cfg = make_test_config();
+    let state = AppState::new(&cfg).await.unwrap();
     // Accept any audience in tests by leaving it empty
     let auth = crate::config::Auth {
       issuer_url: issuer.clone(),
       audience: String::new(),
       leeway_seconds: 60,
+      jwks_refresh_seconds: 0,
     };
     let app = build_app(state, &auth).await.unwrap();
 
@@ -679,11 +688,13 @@ mod tests {
   async fn protected_endpoint_with_malformed_token_401() {
     let issuer = test_issuer();
 
-    let state = AppState::new().await.unwrap();
+    let cfg = make_test_config();
+    let state = AppState::new(&cfg).await.unwrap();
     let auth = crate::config::Auth {
       issuer_url: issuer.clone(),
       audience: String::new(),
       leeway_seconds: 60,
+      jwks_refresh_seconds: 0,
     };
     let app = build_app(state, &auth).await.unwrap();
 
@@ -700,4 +711,96 @@ mod tests {
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
   }
+
+  // #[tokio::test]
+  // async fn uploads_streaming_minio() {
+  //   // Use shared test context
+  //   let ctx = crate::testing::TestCtx::new().await;
+
+  //   // Build AppState using shared storage and bucket
+  //   let state = AppState {
+  //     storage: ctx.storage.clone(),
+  //     bucket: ctx.bucket.clone(),
+  //   };
+
+  //   // Build app with auth and valid JWT
+  //   let issuer = test_issuer();
+  //   let auth = crate::config::Auth {
+  //     issuer_url: issuer.clone(),
+  //     audience: String::new(),
+  //     leeway_seconds: 60,
+  //   };
+  //   let app = build_app(state, &auth).await.unwrap();
+  //   let (user_id, key_id_json, private_key_pem) = load_test_user_key();
+  //   let token =
+  //     fetch_token_private_key_jwt(&issuer, &user_id, &key_id_json, &private_key_pem).await;
+
+  //   let ws = "ws1";
+  //   // 1) Multi-file upload success
+  //   let a = b"hello world".to_vec();
+  //   let b = b"goodbye".to_vec();
+  //   let (body_bytes, boundary) = build_multipart(vec![
+  //     ("a.txt", "text/plain", a.clone()),
+  //     ("b.bin", "application/octet-stream", b.clone()),
+  //   ]);
+
+  //   let req = axum::http::Request::builder()
+  //     .method("POST")
+  //     .uri(format!("/api/v1/workspaces/{}/uploads", ws))
+  //     .header(
+  //       axum::http::header::CONTENT_TYPE,
+  //       format!("multipart/form-data; boundary={}", boundary),
+  //     )
+  //     .header(
+  //       axum::http::header::AUTHORIZATION,
+  //       format!("Bearer {}", token),
+  //     )
+  //     .body(axum::body::Body::from(body_bytes))
+  //     .unwrap();
+
+  //   let resp = app.clone().oneshot(req).await.unwrap();
+  //   assert_eq!(resp.status(), StatusCode::CREATED);
+  //   let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+  //   let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+  //   let arr = v.as_array().unwrap();
+  //   assert_eq!(arr.len(), 2);
+
+  //   // 2) Conflict on re-upload of existing file
+  //   let (body_bytes2, boundary2) = build_multipart(vec![("a.txt", "text/plain", a.clone())]);
+  //   let req2 = axum::http::Request::builder()
+  //     .method("POST")
+  //     .uri(format!("/api/v1/workspaces/{}/uploads", ws))
+  //     .header(
+  //       axum::http::header::CONTENT_TYPE,
+  //       format!("multipart/form-data; boundary={}", boundary2),
+  //     )
+  //     .header(
+  //       axum::http::header::AUTHORIZATION,
+  //       format!("Bearer {}", token),
+  //     )
+  //     .body(axum::body::Body::from(body_bytes2))
+  //     .unwrap();
+  //   let resp2 = app.clone().oneshot(req2).await.unwrap();
+  //   assert_eq!(resp2.status(), StatusCode::CONFLICT);
+
+  //   // 3) Exceed 5MB should yield 413
+  //   let big = vec![0u8; 5_000_001];
+  //   let (body_bytes3, boundary3) =
+  //     build_multipart(vec![("big.bin", "application/octet-stream", big)]);
+  //   let req3 = axum::http::Request::builder()
+  //     .method("POST")
+  //     .uri(format!("/api/v1/workspaces/{}/uploads", ws))
+  //     .header(
+  //       axum::http::header::CONTENT_TYPE,
+  //       format!("multipart/form-data; boundary={}", boundary3),
+  //     )
+  //     .header(
+  //       axum::http::header::AUTHORIZATION,
+  //       format!("Bearer {}", token),
+  //     )
+  //     .body(axum::body::Body::from(body_bytes3))
+  //     .unwrap();
+  //   let resp3 = app.clone().oneshot(req3).await.unwrap();
+  //   assert_eq!(resp3.status(), StatusCode::PAYLOAD_TOO_LARGE);
+  // }
 }

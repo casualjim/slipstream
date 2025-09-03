@@ -1,5 +1,6 @@
 use clap::{Args, Parser};
 use confique::Config as _;
+use secrecy::ExposeSecret;
 use std::path::PathBuf;
 
 #[derive(confique::Config, Debug, Clone)]
@@ -8,6 +9,8 @@ pub struct AppConfig {
   pub server: Server,
   #[config(nested)]
   pub auth: Auth,
+  #[config(nested)]
+  pub uploads: Uploads,
 }
 
 #[derive(confique::Config, Debug, Clone)]
@@ -51,6 +54,9 @@ pub struct Auth {
   pub audience: String,
   #[config(default = 60, env = "SLIPSTREAM__AUTH__LEEWAY_SECONDS")]
   pub leeway_seconds: u64,
+  // How often to refresh JWKS (seconds). Set to 0 to disable background refresh.
+  #[config(default = 600, env = "SLIPSTREAM__AUTH__JWKS_REFRESH_SECONDS")]
+  pub jwks_refresh_seconds: u64,
 }
 
 #[derive(Debug, Parser, Default, Clone)]
@@ -127,7 +133,55 @@ where
     cfg.auth.leeway_seconds = v;
   }
 
+  // Validate uploads config once
+  cfg.uploads.validate()?;
+
   Ok(cfg)
+}
+
+#[derive(confique::Config, Debug, Clone)]
+pub struct Uploads {
+  #[config(env = "UPLOADS_BUCKET")]
+  pub bucket: String,
+  #[config(env = "UPLOADS_S3_ENDPOINT")]
+  pub s3_endpoint: String,
+  #[config(env = "UPLOADS_S3_REGION")]
+  pub s3_region: String,
+  #[config(env = "UPLOADS_S3_ACCESS_KEY_ID")]
+  pub s3_access_key_id: secrecy::SecretString,
+  #[config(env = "UPLOADS_S3_SECRET_ACCESS_KEY")]
+  pub s3_secret_access_key: secrecy::SecretString,
+  #[config(default = true, env = "UPLOADS_S3_FORCE_PATH_STYLE")]
+  pub s3_force_path_style: bool,
+  // Per-file size limit, in bytes. Defaults to 5 MiB.
+  #[config(default = 5_242_880, env = "UPLOADS_MAX_FILE_SIZE_BYTES")]
+  pub max_file_size_bytes: usize,
+}
+
+impl Uploads {
+  pub fn validate(&self) -> eyre::Result<()> {
+    if self.bucket.trim().is_empty() {
+      return Err(eyre::eyre!("UPLOADS_BUCKET must not be empty"));
+    }
+    if self.s3_region.trim().is_empty() {
+      return Err(eyre::eyre!("UPLOADS_S3_REGION must not be empty"));
+    }
+    if self.s3_access_key_id.expose_secret().trim().is_empty() {
+      return Err(eyre::eyre!("UPLOADS_S3_ACCESS_KEY_ID must not be empty"));
+    }
+    if self.s3_secret_access_key.expose_secret().trim().is_empty() {
+      return Err(eyre::eyre!("UPLOADS_S3_SECRET_ACCESS_KEY must not be empty"));
+    }
+    if self.max_file_size_bytes == 0 {
+      return Err(eyre::eyre!("UPLOADS_MAX_FILE_SIZE_BYTES must be > 0"));
+    }
+    let url = url::Url::parse(&self.s3_endpoint)
+      .map_err(|e| eyre::eyre!("UPLOADS_S3_ENDPOINT is not a valid URL: {e}"))?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+      return Err(eyre::eyre!("UPLOADS_S3_ENDPOINT must be http or https"));
+    }
+    Ok(())
+  }
 }
 
 #[cfg(test)]
@@ -154,10 +208,34 @@ mod tests {
     path
   }
 
+  // Provide minimal uploads env so AppConfig can load without altering defaults.
+  fn with_min_uploads_env<F, R>(f: F) -> R
+  where
+    F: FnOnce() -> R,
+  {
+    unsafe {
+      env::set_var("UPLOADS_BUCKET", "test-bucket");
+      env::set_var("UPLOADS_S3_ENDPOINT", "http://127.0.0.1:9000");
+      env::set_var("UPLOADS_S3_REGION", "us-east-1");
+      env::set_var("UPLOADS_S3_ACCESS_KEY_ID", "minioadmin");
+      env::set_var("UPLOADS_S3_SECRET_ACCESS_KEY", "minioadmin");
+    }
+    let out = f();
+    unsafe {
+      env::remove_var("UPLOADS_BUCKET");
+      env::remove_var("UPLOADS_S3_ENDPOINT");
+      env::remove_var("UPLOADS_S3_REGION");
+      env::remove_var("UPLOADS_S3_ACCESS_KEY_ID");
+      env::remove_var("UPLOADS_S3_SECRET_ACCESS_KEY");
+    }
+    out
+  }
+
   #[test]
   fn config_defaults_when_no_sources() {
-    // No files, no env, CLI empty
-    let cfg = AppConfig::builder().env().load().unwrap();
+    // No files, CLI empty. We set only uploads env to satisfy required fields.
+    let _g = env_lock();
+    let cfg = with_min_uploads_env(|| AppConfig::builder().env().load().unwrap());
     assert_eq!(cfg.server.http_port, 8080);
     assert_eq!(cfg.server.https_port, 8443);
     assert_eq!(cfg.server.monitoring_port, 9090);
@@ -166,6 +244,7 @@ mod tests {
 
   #[test]
   fn file_overrides_defaults() {
+    let _g = env_lock();
     let path = write_temp_toml(
       r#"[server]
 http_port = 18080
@@ -175,7 +254,7 @@ tls_enabled = true
 "#,
     );
 
-    let cfg = AppConfig::builder().env().file(&path).load().unwrap();
+    let cfg = with_min_uploads_env(|| AppConfig::builder().env().file(&path).load().unwrap());
 
     assert_eq!(cfg.server.http_port, 18080);
     assert_eq!(cfg.server.https_port, 18443);
@@ -196,7 +275,7 @@ http_port = 18080
       env::set_var("SLIPSTREAM__HTTP_PORT", "28080");
     }
 
-    let cfg = AppConfig::builder().env().file(&path).load().unwrap();
+    let cfg = with_min_uploads_env(|| AppConfig::builder().env().file(&path).load().unwrap());
 
     assert_eq!(cfg.server.http_port, 28080);
 
@@ -212,7 +291,7 @@ http_port = 18080
       env::set_var("SLIPSTREAM__HTTP_PORT", "28080");
     }
 
-    let cfg = super::load_config_with_args(["slipstream-server", "--http-port", "38080"]).unwrap();
+    let cfg = with_min_uploads_env(|| super::load_config_with_args(["slipstream-server", "--http-port", "38080"]).unwrap());
 
     assert_eq!(cfg.server.http_port, 38080);
 
