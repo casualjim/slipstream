@@ -1,0 +1,16 @@
+services:
+  minio:
+    image: minio/minio
+    environment:
+      - MINIO_ROOT_USER=test-user
+      - MINIO_ROOT_PASSWORD=sk-test-password
+      - MINIO_DEFAULT_BUCKETS=test-bucket
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data
+volumes:
+  minio_data:
+    driver: local

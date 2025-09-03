@@ -1,6 +1,7 @@
 services:
   falkordb:
     image: falkordb/falkordb:latest
+    restart: unless-stopped
     environment:
       REDIS_ARGS: "--port 6390"
       PORT: "3379"
