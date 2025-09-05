@@ -11,4 +11,3 @@ mod storage;
 mod testing;
 
 pub use app::AppState;
-use services::add_messages::add_messages_service;

@@ -1,2 +1,2 @@
 pub mod add_messages;
-pub mod uploads;
+pub mod files;

@@ -19,9 +19,9 @@ confique = { version = "0.3.1", features = ["toml", "json5", "yaml"] }
 async-stream.workspace = true
 async-trait.workspace = true
 # storage and utils
-aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-credential-types = {version = "1", features = ["hardcoded-credentials"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
+aws-sdk-s3 = { version = "1.17.0", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
 bytes.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
@@ -71,6 +71,6 @@ reqwest = { workspace = true, features = ["json", "rustls-tls", "multipart"] }
 testcontainers.workspace = true
 testcontainers-modules = { workspace = true, features = ["minio"] }
 aws-credential-types = { version = "1", features = [ "test-util"] }
-aws-config = { version = "1", features = ["behavior-version-latest", "test-util"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["test-util"] }
+aws-config = { version = "1.1.7", features = ["behavior-version-latest", "test-util"] }
+aws-sdk-s3 = { version = "1.17.0", default-features = false, features = ["test-util"] }
 workspace-hack.workspace = true

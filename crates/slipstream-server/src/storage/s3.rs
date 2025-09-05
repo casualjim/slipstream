@@ -2,15 +2,24 @@ use aws_credential_types::Credentials;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3 as s3;
 use aws_sdk_s3::config::Region;
+use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::primitives::ByteStream as S3ByteStream;
+use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
+
+use bytes::Bytes;
+
+use http_body_util::{BodyExt, StreamBody};
 use secrecy::ExposeSecret;
+use tokio::io::AsyncReadExt;
 use tracing::debug;
 
-use super::{BoxBody, StorageClient, StorageError};
+use super::{BoxBody, StorageClient, StorageError, StorageObject};
 
 pub struct S3Storage {
   client: s3::Client,
 }
+
+const MIN_PART_SIZE: u64 = 5 * 1024 * 1024; // 5MB
 
 impl S3Storage {
   pub async fn new(
@@ -72,31 +81,167 @@ impl StorageClient for S3Storage {
     bucket: &str,
     key: &str,
     content_type: Option<&str>,
-    body: BoxBody,
+    mut body: BoxBody,
   ) -> Result<(), StorageError> {
-    let bs = S3ByteStream::from_body_1_x(body);
+    let multipart_upload = self
+      .client
+      .create_multipart_upload()
+      .bucket(bucket)
+      .key(key)
+      .set_content_type(content_type.map(|s| s.to_string()))
+      .send()
+      .await
+      .map_err(|e| StorageError::Unavailable(e.to_string()))?;
 
-    let mut req = self.client.put_object().bucket(bucket).key(key).body(bs);
-    if let Some(ct) = content_type {
-      req = req.content_type(ct);
+    let upload_id = multipart_upload.upload_id().unwrap();
+    let mut completed_parts = Vec::new();
+    let mut part_number = 1;
+
+    loop {
+      let mut buffer = Vec::with_capacity(MIN_PART_SIZE as usize);
+
+      while buffer.len() < MIN_PART_SIZE as usize {
+        match body.frame().await {
+          Some(Ok(frame)) => {
+            if let Some(data) = frame.data_ref() {
+              buffer.extend_from_slice(data);
+            }
+          }
+          Some(Err(e)) => return Err(StorageError::Unavailable(e.to_string())),
+          None => break, // End of stream
+        }
+      }
+
+      if buffer.is_empty() {
+        break; // No more data to upload
+      }
+
+      let upload_part_res = self
+        .client
+        .upload_part()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(upload_id)
+        .part_number(part_number)
+        .body(S3ByteStream::from(buffer))
+        .send()
+        .await
+        .map_err(|e| StorageError::Unavailable(e.to_string()))?;
+
+      completed_parts.push(
+        CompletedPart::builder()
+          .part_number(part_number)
+          .e_tag(upload_part_res.e_tag.unwrap_or_default())
+          .build(),
+      );
+
+      part_number += 1;
     }
 
-    match tokio::time::timeout(std::time::Duration::from_secs(60), req.send()).await {
-      Ok(Ok(_)) => Ok(()),
-      Ok(Err(e)) => Err(StorageError::Unavailable(e.to_string())),
-      Err(_) => Err(StorageError::Timeout),
-    }
+    let completed_multipart_upload = CompletedMultipartUpload::builder()
+      .set_parts(Some(completed_parts))
+      .build();
+
+    self
+      .client
+      .complete_multipart_upload()
+      .bucket(bucket)
+      .key(key)
+      .upload_id(upload_id)
+      .multipart_upload(completed_multipart_upload)
+      .send()
+      .await
+      .map_err(|e| StorageError::Unavailable(e.to_string()))?;
+
+    Ok(())
+  }
+
+  async fn get(&self, bucket: &str, key: &str) -> Result<BoxBody, StorageError> {
+    let obj = self
+      .client
+      .get_object()
+      .bucket(bucket)
+      .key(key)
+      .send()
+      .await
+      .map_err(|err| match err {
+        SdkError::ServiceError(e) if e.err().is_no_such_key() => StorageError::NotFound,
+        e => StorageError::Unavailable(e.to_string()),
+      })?;
+
+    // Convert S3 ByteStream to a proper stream of frames without loading entire file into memory
+    // This reads the S3 response in chunks and streams them as HTTP body frames
+    let stream = async_stream::try_stream! {
+        let mut async_read = obj.body.into_async_read();
+        let mut buffer = vec![0; 8192]; // 8KB chunks for efficient streaming
+
+        loop {
+            match AsyncReadExt::read(&mut async_read, &mut buffer).await {
+                Ok(0) => break, // End of stream
+                Ok(n) => {
+                    let chunk = Bytes::copy_from_slice(&buffer[..n]);
+                    yield http_body::Frame::data(chunk);
+                }
+                Err(e) => {
+                    yield Err(std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                }
+            }
+        }
+    };
+
+    Ok(BoxBody::new(StreamBody::new(stream)))
+  }
+
+  async fn list(&self, bucket: &str, prefix: &str) -> Result<Vec<StorageObject>, StorageError> {
+    let res = self
+      .client
+      .list_objects_v2()
+      .bucket(bucket)
+      .prefix(prefix)
+      .send()
+      .await
+      .map_err(|e| StorageError::Unavailable(e.to_string()))?;
+
+    let objects = res
+      .contents()
+      .iter()
+      .filter_map(|obj| {
+        let last_modified = obj
+          .last_modified
+          .and_then(|dt| jiff::Timestamp::from_second(dt.secs()).ok());
+
+        Some(StorageObject {
+          key: obj.key()?.to_string(),
+          size: obj.size().unwrap_or_default() as u64,
+          last_modified: last_modified?,
+        })
+      })
+      .collect();
+
+    Ok(objects)
+  }
+
+  async fn delete(&self, bucket: &str, key: &str) -> Result<(), StorageError> {
+    self
+      .client
+      .delete_object()
+      .bucket(bucket)
+      .key(key)
+      .send()
+      .await
+      .map_err(|e| StorageError::Unavailable(e.to_string()))?;
+
+    Ok(())
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+
   use crate::testing::TestCtx;
   use aws_sdk_s3::primitives::ByteStream as S3ByteStream;
   use bytes::Bytes;
-  use http_body_util::BodyExt as _;
-  use http_body_util::Full;
+  use http_body_util::{BodyExt, Full};
 
   #[tokio::test]
   async fn exists_negative_for_missing_key() {

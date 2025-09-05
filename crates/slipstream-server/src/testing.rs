@@ -11,6 +11,7 @@ use tracing_subscriber::EnvFilter;
 pub use uuid::Uuid;
 
 pub use crate::storage::s3::S3Storage;
+use crate::storage::StorageClient;
 
 static TRACING: OnceLock<()> = OnceLock::new();
 fn init_tracing() {
@@ -18,12 +19,7 @@ fn init_tracing() {
     // Prefer RUST_LOG if set; otherwise, enable debug for our crate and
     // keep common dependencies quieter by default.
     let default_filter = "\
-slipstream_server=debug,\
-slipstream_core=debug,\
-slipstream_restate=debug,\
-aws_sdk_s3=warn,aws_smithy_http=warn,aws_smithy_types=warn,aws_config=warn,\
-hyper=warn,tower=warn,reqwest=warn,\
-info";
+s3=warn,aws_smithy_http=warn,aws_smithy_types=warn,aws_config=warn,\n hyper=warn,tower=warn,reqwest=warn,\n info";
     let env_filter =
       EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
 
@@ -40,7 +36,7 @@ pub async fn start_minio() -> (ContainerAsync<MinIO>, String) {
   let minio = MinIO::default().start().await.expect("start minio");
   let host = minio.get_host().await.expect("host");
   let api_port = minio.get_host_port_ipv4(9000).await.expect("port");
-  let endpoint = format!("http://{}:{}", host, api_port);
+  let endpoint = format!("http://{host}:{api_port}");
   (minio, endpoint)
 }
 
@@ -72,7 +68,7 @@ pub async fn build_storage(endpoint: &str) -> S3Storage {
 pub struct TestCtx {
   pub minio: ContainerAsync<MinIO>,
   pub client: s3::Client,
-  pub storage: Arc<S3Storage>,
+  pub storage: Arc<dyn StorageClient + Send + Sync>,
   pub bucket: String,
 }
 
@@ -81,7 +77,7 @@ impl TestCtx {
     init_tracing();
     let (minio, endpoint) = start_minio().await;
     let client = make_s3_client(&endpoint).await;
-    let storage = Arc::new(build_storage(&endpoint).await);
+    let storage: Arc<dyn StorageClient + Send + Sync> = Arc::new(build_storage(&endpoint).await);
     let bucket = format!("test-{}", Uuid::now_v7());
     client
       .create_bucket()

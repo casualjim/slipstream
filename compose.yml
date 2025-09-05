@@ -1,11 +1,12 @@
 include:
   # - deploy/local/timescale.yaml
   # - deploy/local/valkey.yaml
-  # - deploy/local/falkordb.yaml
+  - deploy/local/falkordb.yaml
+  - deploy/local/minio.yaml
   - deploy/local/nats.yaml
   - deploy/local/restate.yaml
+  - deploy/local/qdrant.yaml
   # - deploy/local/clickhouse.yaml
   # - deploy/local/milvus.yaml
   # - deploy/local/tensorzero.yaml
   # - deploy/local/wasmcloud.yaml
-

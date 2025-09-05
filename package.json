@@ -7,12 +7,15 @@
   ],
   "devDependencies": {
     "@types/bun": "^1.2.19",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "@kumos/tree-sitter-parsers": "^0.1.4",
+    "@kumos/tree-sitter-parsers-linux-x64": "^0.1.4"
   },
   "peerDependencies": {
     "typescript": "^5.9.2"
   },
   "trustedDependencies": [
-    "kuzu"
+    "kuzu",
+    "@kumos/tree-sitter-parsers"
   ]
 }

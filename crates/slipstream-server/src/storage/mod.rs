@@ -15,6 +15,13 @@ pub enum StorageError {
   Internal(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StorageObject {
+  pub key: String,
+  pub size: u64,
+  pub last_modified: jiff::Timestamp,
+}
+
 pub type BoxBody = HbBoxBody<Bytes, std::io::Error>;
 
 #[async_trait::async_trait]
@@ -27,6 +34,12 @@ pub trait StorageClient {
     content_type: Option<&str>,
     body: BoxBody,
   ) -> Result<(), StorageError>;
+
+  async fn get(&self, bucket: &str, key: &str) -> Result<BoxBody, StorageError>;
+
+  async fn list(&self, bucket: &str, prefix: &str) -> Result<Vec<StorageObject>, StorageError>;
+
+  async fn delete(&self, bucket: &str, key: &str) -> Result<(), StorageError>;
 }
 
 pub mod s3;

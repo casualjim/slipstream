@@ -14,5 +14,5 @@ bun = "latest"
 "cargo:cargo-hakari" = "latest"
 
 [env]
-_.file = ".env.local"
+_.file = ".env"
 KUZU_SHARED = "1"

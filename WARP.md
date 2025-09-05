@@ -1,1 +1,1 @@
-AGENTS.md
+/Users/ivan/github/casualjim/slipstream.entity-discovery/AGENTS.md
