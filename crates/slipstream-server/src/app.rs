@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::config::AppConfig;
-use crate::storage::{StorageClient, s3::S3Storage};
+use slipstream_objectstorage::{StorageClient, s3::S3Storage};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,7 +22,7 @@ impl AppState {
     )
     .await?;
 
-Ok(Self {
+    Ok(Self {
       storage: Arc::new(storage),
       bucket: cfg.uploads.bucket.clone(),
       max_file_size_bytes: cfg.uploads.max_file_size_bytes,

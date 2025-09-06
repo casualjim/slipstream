@@ -10,8 +10,8 @@ use testcontainers_modules::testcontainers::runners::AsyncRunner as _;
 use tracing_subscriber::EnvFilter;
 pub use uuid::Uuid;
 
-pub use crate::storage::s3::S3Storage;
-use crate::storage::StorageClient;
+use slipstream_objectstorage::StorageClient;
+pub use slipstream_objectstorage::s3::S3Storage;
 
 static TRACING: OnceLock<()> = OnceLock::new();
 fn init_tracing() {

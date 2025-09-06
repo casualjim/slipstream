@@ -17,11 +17,20 @@ publish = false
 [dependencies]
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
+aws-config = { version = "1", features = ["behavior-version-latest", "test-util"] }
+aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
+aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "test-util"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "test-util"] }
+aws-smithy-http-client = { version = "1", default-features = false, features = ["hyper-014", "legacy-test-util", "rustls-aws-lc"] }
+aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "test-util"] }
 axum = { version = "0.8", features = ["http2", "macros", "multipart", "ws"] }
 bitflags = { version = "2", default-features = false, features = ["std"] }
+bs58 = { version = "0.5" }
 bytes = { version = "1", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
+data-encoding = { version = "2" }
 deranged = { version = "0.4", default-features = false, features = ["powerfmt", "serde", "std"] }
 digest = { version = "0.10", features = ["mac", "std"] }
 either = { version = "1", features = ["use_std"] }
@@ -29,6 +38,7 @@ form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-executor = { version = "0.3" }
 futures-io = { version = "0.3" }
+futures-task = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 getrandom = { version = "0.2", default-features = false, features = ["js", "rdrand", "std"] }
 hashbrown-3575ec1268b04181 = { package = "hashbrown", version = "0.15" }
@@ -43,6 +53,7 @@ indexmap = { version = "2", features = ["serde"] }
 jiff = { version = "0.2", features = ["logging", "serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
+nom = { version = "7" }
 num-bigint = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
 num-traits = { version = "0.2", features = ["i128"] }
@@ -51,7 +62,7 @@ potential_utf = { version = "0.1", default-features = false, features = ["alloc"
 regex = { version = "1" }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.12", features = ["brotli", "deflate", "gzip", "hickory-dns", "json", "macos-system-configuration", "rustls-tls", "rustls-tls-native-roots", "stream", "zstd"] }
+reqwest = { version = "0.12", features = ["brotli", "deflate", "gzip", "hickory-dns", "json", "macos-system-configuration", "multipart", "rustls-tls", "rustls-tls-native-roots", "stream", "zstd"] }
 rustls = { version = "0.23", features = ["ring"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 semver = { version = "1", features = ["serde"] }
@@ -69,7 +80,7 @@ tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 tower = { version = "0.5", default-features = false, features = ["buffer", "filter", "log", "make", "util"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 uuid = { version = "1", features = ["js", "serde", "v7", "zerocopy"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
@@ -77,12 +88,21 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 [build-dependencies]
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
+aws-config = { version = "1", features = ["behavior-version-latest", "test-util"] }
+aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
+aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "test-util"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "test-util"] }
+aws-smithy-http-client = { version = "1", default-features = false, features = ["hyper-014", "legacy-test-util", "rustls-aws-lc"] }
+aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "test-util"] }
 axum = { version = "0.8", features = ["http2", "macros", "multipart", "ws"] }
 bitflags = { version = "2", default-features = false, features = ["std"] }
+bs58 = { version = "0.5" }
 bytes = { version = "1", features = ["serde"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
+data-encoding = { version = "2" }
 deranged = { version = "0.4", default-features = false, features = ["powerfmt", "serde", "std"] }
 digest = { version = "0.10", features = ["mac", "std"] }
 displaydoc = { version = "0.2" }
@@ -91,6 +111,7 @@ form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-executor = { version = "0.3" }
 futures-io = { version = "0.3" }
+futures-task = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 getrandom = { version = "0.2", default-features = false, features = ["js", "rdrand", "std"] }
 hashbrown-3575ec1268b04181 = { package = "hashbrown", version = "0.15" }
@@ -105,6 +126,7 @@ indexmap = { version = "2", features = ["serde"] }
 jiff = { version = "0.2", features = ["logging", "serde"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
+nom = { version = "7" }
 num-bigint = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
 num-traits = { version = "0.2", features = ["i128"] }
@@ -113,7 +135,7 @@ potential_utf = { version = "0.1", default-features = false, features = ["alloc"
 regex = { version = "1" }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa", "hybrid", "meta", "nfa", "perf", "unicode"] }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.12", features = ["brotli", "deflate", "gzip", "hickory-dns", "json", "macos-system-configuration", "rustls-tls", "rustls-tls-native-roots", "stream", "zstd"] }
+reqwest = { version = "0.12", features = ["brotli", "deflate", "gzip", "hickory-dns", "json", "macos-system-configuration", "multipart", "rustls-tls", "rustls-tls-native-roots", "stream", "zstd"] }
 rustls = { version = "0.23", features = ["ring"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 semver = { version = "1", features = ["serde"] }
@@ -133,7 +155,7 @@ tokio-util = { version = "0.7", features = ["codec", "compat", "io"] }
 tower = { version = "0.5", default-features = false, features = ["buffer", "filter", "log", "make", "util"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 uuid = { version = "1", features = ["js", "serde", "v7", "zerocopy"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }

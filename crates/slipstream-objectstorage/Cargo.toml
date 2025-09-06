@@ -1,0 +1,28 @@
+[package]
+name = "slipstream-objectstorage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
+bytes.workspace = true
+secrecy.workspace = true
+thiserror.workspace = true
+eyre.workspace = true
+tracing.workspace = true
+jiff.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+aws-credential-types = { version = "1", features = ["test-util"] }
+aws-config = { version = "1", features = ["behavior-version-latest", "test-util"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["test-util"] }
+testcontainers.workspace = true
+testcontainers-modules = { workspace = true, features = ["minio"] }
+tracing-subscriber.workspace = true

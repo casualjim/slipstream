@@ -6,14 +6,11 @@ use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::primitives::ByteStream as S3ByteStream;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 
-use bytes::Bytes;
-
-use http_body_util::{BodyExt, StreamBody};
 use secrecy::ExposeSecret;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tracing::debug;
 
-use super::{BoxBody, StorageClient, StorageError, StorageObject};
+use super::{StorageClient, StorageError, StorageObject};
 
 pub struct S3Storage {
   client: s3::Client,
@@ -76,12 +73,12 @@ impl StorageClient for S3Storage {
     }
   }
 
-  async fn put_body(
+  async fn put(
     &self,
     bucket: &str,
     key: &str,
     content_type: Option<&str>,
-    mut body: BoxBody,
+    mut body: Box<dyn AsyncRead + Send + Unpin + 'static>,
   ) -> Result<(), StorageError> {
     let multipart_upload = self
       .client
@@ -101,14 +98,11 @@ impl StorageClient for S3Storage {
       let mut buffer = Vec::with_capacity(MIN_PART_SIZE as usize);
 
       while buffer.len() < MIN_PART_SIZE as usize {
-        match body.frame().await {
-          Some(Ok(frame)) => {
-            if let Some(data) = frame.data_ref() {
-              buffer.extend_from_slice(data);
-            }
-          }
-          Some(Err(e)) => return Err(StorageError::Unavailable(e.to_string())),
-          None => break, // End of stream
+        let mut temp_buf = [0u8; 8192];
+        match body.read(&mut temp_buf).await {
+          Ok(0) => break, // End of stream
+          Ok(n) => buffer.extend_from_slice(&temp_buf[..n]),
+          Err(e) => return Err(StorageError::Unavailable(e.to_string())),
         }
       }
 
@@ -156,7 +150,11 @@ impl StorageClient for S3Storage {
     Ok(())
   }
 
-  async fn get(&self, bucket: &str, key: &str) -> Result<BoxBody, StorageError> {
+  async fn get(
+    &self,
+    bucket: &str,
+    key: &str,
+  ) -> Result<Box<dyn tokio::io::AsyncRead + Send + Unpin + 'static>, StorageError> {
     let obj = self
       .client
       .get_object()
@@ -169,27 +167,8 @@ impl StorageClient for S3Storage {
         e => StorageError::Unavailable(e.to_string()),
       })?;
 
-    // Convert S3 ByteStream to a proper stream of frames without loading entire file into memory
-    // This reads the S3 response in chunks and streams them as HTTP body frames
-    let stream = async_stream::try_stream! {
-        let mut async_read = obj.body.into_async_read();
-        let mut buffer = vec![0; 8192]; // 8KB chunks for efficient streaming
-
-        loop {
-            match AsyncReadExt::read(&mut async_read, &mut buffer).await {
-                Ok(0) => break, // End of stream
-                Ok(n) => {
-                    let chunk = Bytes::copy_from_slice(&buffer[..n]);
-                    yield http_body::Frame::data(chunk);
-                }
-                Err(e) => {
-                    yield Err(std::io::Error::new(std::io::ErrorKind::Other, e))?;
-                }
-            }
-        }
-    };
-
-    Ok(BoxBody::new(StreamBody::new(stream)))
+    // Return the S3 body directly as Box<dyn AsyncRead>
+    Ok(Box::new(obj.body.into_async_read()))
   }
 
   async fn list(&self, bucket: &str, prefix: &str) -> Result<Vec<StorageObject>, StorageError> {
@@ -232,72 +211,5 @@ impl StorageClient for S3Storage {
       .map_err(|e| StorageError::Unavailable(e.to_string()))?;
 
     Ok(())
-  }
-}
-
-#[cfg(test)]
-mod tests {
-
-  use crate::testing::TestCtx;
-  use aws_sdk_s3::primitives::ByteStream as S3ByteStream;
-  use bytes::Bytes;
-  use http_body_util::{BodyExt, Full};
-
-  #[tokio::test]
-  async fn exists_negative_for_missing_key() {
-    let ctx = TestCtx::new().await;
-    let exists = ctx
-      .storage
-      .exists(&ctx.bucket, "missing.txt")
-      .await
-      .expect("exists");
-    assert!(!exists);
-    ctx.stop().await;
-  }
-
-  #[tokio::test]
-  async fn exists_positive_for_present_key() {
-    let ctx = TestCtx::new().await;
-    let key = "present.txt";
-    ctx
-      .client
-      .put_object()
-      .bucket(&ctx.bucket)
-      .key(key)
-      .body(S3ByteStream::from_static(b"hi"))
-      .send()
-      .await
-      .expect("put_object");
-
-    let exists = ctx.storage.exists(&ctx.bucket, key).await.expect("exists");
-    assert!(exists);
-    ctx.stop().await;
-  }
-
-  #[tokio::test]
-  async fn put_body_writes_object() {
-    let ctx = TestCtx::new().await;
-    let key = "upload.txt";
-    let body = Full::new(Bytes::from_static(b"world"))
-      .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "impossible"))
-      .boxed();
-
-    ctx
-      .storage
-      .put_body(&ctx.bucket, key, Some("text/plain"), body)
-      .await
-      .expect("put_body");
-
-    let out = ctx
-      .client
-      .get_object()
-      .bucket(&ctx.bucket)
-      .key(key)
-      .send()
-      .await
-      .expect("get_object");
-    let bytes = out.body.collect().await.expect("collect").into_bytes();
-    assert_eq!(&bytes[..], b"world");
-    ctx.stop().await;
   }
 }

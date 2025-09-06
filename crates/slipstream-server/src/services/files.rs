@@ -11,15 +11,15 @@ use axum::{
   response::{IntoResponse, Response},
   routing::{get, post},
 };
-use futures::StreamExt;
-use http_body_util::{BodyExt, StreamBody};
+
+use futures::TryStreamExt;
+
+use tokio_util::io::{ReaderStream, StreamReader};
+
 use tracing::instrument;
 
-use crate::{
-  app::AppState,
-  error::AppError,
-  storage::{StorageError, StorageObject},
-};
+use crate::{app::AppState, error::AppError};
+use slipstream_objectstorage::{StorageError, StorageObject};
 
 // Combined routes for all file operations
 pub fn routes() -> Router<AppState> {
@@ -125,11 +125,9 @@ async fn upload_files(
       let content_type_clone = content_type.clone();
 
       async move {
-        let body = BodyExt::boxed(StreamBody::new(
-          rx.into_stream().map(|res| res.map(http_body::Frame::data)),
-        ));
+        let body = Box::new(StreamReader::new(rx.into_stream().map_ok(|bytes| bytes)));
         storage
-          .put_body(&bucket, &key, content_type_clone.as_deref(), body)
+          .put(&bucket, &key, content_type_clone.as_deref(), body)
           .await
       }
     };
@@ -175,8 +173,11 @@ async fn download_file(
   Path((ws, key)): Path<(String, String)>,
 ) -> Result<Response, AppError> {
   let key = format!("workspaces/{}/", ws) + &key;
-  let body = app.storage.get(&app.bucket, &key).await?;
-  Ok(Response::new(Body::new(body)))
+  let read_body = app.storage.get(&app.bucket, &key).await?;
+
+  // Convert AsyncRead to HTTP Body using Body::from_stream
+  let body = Body::from_stream(ReaderStream::new(read_body));
+  Ok(Response::new(body))
 }
 
 async fn delete_file(
