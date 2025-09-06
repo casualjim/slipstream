@@ -1,14 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the container using cargo-chef Dockerfile.
-# BIN can be overridden to build a different package.
-BIN=${BIN:-slipstream-server}
-TAG=${TAG:-slipstream:${BIN}}
+#MISE description="Build Slipstream Docker image"
+#MISE sources=["Dockerfile","**/Cargo.toml","**/*.rs"]
 
-DOCKER_BUILDKIT=1 docker build \
-  --build-arg BIN="${BIN}" \
-  -t "${TAG}" \
-  -f Dockerfile .
+#USAGE flag "--package <package>" help="Cargo package (crate) to build" {
+#USAGE }
+#USAGE flag "--bin-name <bin_name>" help="Produced binary name (if different from package)" {
+#USAGE }
+#USAGE flag "--tag <tag>" help="Docker image tag to produce (overrides default)" {
+#USAGE }
+#USAGE flag "--platform <platform>" help="Docker platform/architecture (e.g. linux/amd64)" {
+#USAGE }
 
-echo "Built image: ${TAG}"
+echo "🔨 Building Docker image (usage-provided args are optional)"
+
+if [ -z "${usage_package:-}" ]; then
+  echo "Error: --package is required"
+  exit 1
+fi
+
+# Resolve final values from usage flags only (no environment fallbacks)
+bin_name="${usage_bin_name:-$usage_package}"
+tag="${usage_tag:-"latest"}"
+
+echo "Building package='${usage_package}' bin_name='${bin_name}' tag='${tag}' platform='${usage_platform:="linux/amd64,linux/arm64"}'"
+
+MANIFEST=slipstream-b2-listener-$RANDOM
+podman build --platform "${usage_platform}" --manifest $MANIFEST --build-arg "PACKAGE=${usage_package}" --build-arg "BIN_NAME=${bin_name}" --build-arg "TAG=${tag}" .
+podman manifest push --all $MANIFEST "docker://ghcr.io/casualjim/slipstream/${usage_package}:${tag}"
+
+echo "Built image: ${tag}"

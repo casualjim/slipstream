@@ -1,0 +1,7 @@
+[package]
+name = "slipstream-memory"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+workspace-hack.workspace = true

@@ -1,0 +1,25 @@
+[package]
+name = "slipstream-b2-listener"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+async-nats.workspace = true
+color-eyre.workspace = true
+dotenvy.workspace = true
+eyre.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+workspace-hack = { workspace = true }
+hmac = "0.12"
+sha2 = "0.10"
+base64.workspace = true
+bytes.workspace = true
+uuid.workspace = true
+time.workspace = true
+hex = "0.4"

@@ -18,6 +18,7 @@ tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
 serde.workspace = true
+workspace-hack = { workspace = true }
 
 [dev-dependencies]
 aws-credential-types = { version = "1", features = ["test-util"] }
@@ -26,3 +27,4 @@ aws-sdk-s3 = { version = "1", default-features = false, features = ["test-util"]
 testcontainers.workspace = true
 testcontainers-modules = { workspace = true, features = ["minio"] }
 tracing-subscriber.workspace = true
+workspace-hack = { workspace = true }

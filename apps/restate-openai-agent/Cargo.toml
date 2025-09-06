@@ -1,0 +1,7 @@
+[package]
+name = "restate-openai-agent"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+workspace-hack = { workspace = true }

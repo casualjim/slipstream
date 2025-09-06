@@ -1,0 +1,16 @@
+.gitignore
+.dockerignore
+README.md
+target/
+**/.DS_Store
+**/node_modules/
+**/target/
+**/*.rs.bk
+.vscode/
+.idea/
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+Cargo.lock

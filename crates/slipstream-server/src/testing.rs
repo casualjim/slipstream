@@ -18,8 +18,7 @@ fn init_tracing() {
   TRACING.get_or_init(|| {
     // Prefer RUST_LOG if set; otherwise, enable debug for our crate and
     // keep common dependencies quieter by default.
-    let default_filter = "\
-s3=warn,aws_smithy_http=warn,aws_smithy_types=warn,aws_config=warn,\n hyper=warn,tower=warn,reqwest=warn,\n info";
+    let default_filter = "s3=warn,aws_smithy_http=warn,aws_smithy_types=warn,aws_config=warn,hyper=warn,tower=warn,reqwest=warn,info";
     let env_filter =
       EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
 

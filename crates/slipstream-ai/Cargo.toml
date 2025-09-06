@@ -1,0 +1,37 @@
+[package]
+name = "slipstream-ai"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+eyre.workspace = true
+futures.workspace = true
+http.workspace = true
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json", "http2", "stream", "charset"] }
+reqwest-middleware = { workspace = true, features = ["rustls-tls", "json", "http2", "charset"] }
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tiktoken-rs.workspace = true
+tokenizers = { workspace = true, default-features = false, features = ["esaxx_fast", "http", "onig"] }
+
+hyperpolyglot = "0.1.7"
+infer = "0.19.0"
+secrecy = { workspace = true, features = ["serde"] }
+text-splitter = { workspace = true, features = ["code", "tiktoken-rs", "tokenizers"] }
+tree-sitter = "0.25"
+tree-sitter-language = "0.1.5"
+typed-builder.workspace = true
+workspace-hack.workspace = true
+
+[build-dependencies]
+serde.workspace = true
+serde_json.workspace = true
+workspace-hack.workspace = true
+
+[dev-dependencies]
+restate-sdk-testcontainers = "0.6.0"  # Match restate-sdk version exactly
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+workspace-hack.workspace = true
