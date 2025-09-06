@@ -53,7 +53,7 @@ RUN case "$TARGETARCH" in \
         *) echo "Unsupported architecture: $TARGETARCH"; exit 1 ;; \
     esac &&\
     cargo build --release --package ${PACKAGE} --target ${TARGET_TRIPLE} &&\
-    cp target/release/${TARGET_TRIPLE}/${BIN_NAME} /bin/app
+    cp target/${TARGET_TRIPLE}/release/${BIN_NAME} /bin/app
 
 # 4) Runtime: small image with just the binary
 FROM alpine AS runtime
